@@ -2,9 +2,9 @@
 set -eo pipefail
 
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-PYTHON_VENV="/usr/bin/python3"   # system python — has AppIndicator3 / gi
+SCRIPTS_ROOT="$(dirname "$SCRIPT_DIR")"
+PYTHON_VENV="/usr/bin/python3"
 PYTHON_WORK="$SCRIPT_DIR/.whisper/env/bin/python3"
-INDICATOR="$SCRIPT_DIR/.whisper/indicator.py"
 WORKER="$SCRIPT_DIR/.whisper/transcribe.py"
 
 AUDIO_EXT="mp3|wav|flac|ogg|m4a|aac|opus|wma"
@@ -18,45 +18,58 @@ while IFS= read -r f; do
 done <<< "${NAUTILUS_SCRIPT_SELECTED_FILE_PATHS:-}"
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
-    zenity --error --title="Whisper" \
-        --text="Не выбрано ни одного аудио или видео файла." --width=300
+    notify-send "Транскрипция Whisper" "Не выбрано ни одного аудио или видео файла." -i dialog-error
     exit 1
 fi
 
-OPTIONS=$(zenity --forms \
-    --title="Транскрипция Whisper" \
-    --text="Параметры (${#FILES[@]} файл(ов)) — прогресс в панели" \
-    --add-combo="Модель" \
-    --combo-values="large-v3-turbo|large-v3|medium|small|base|tiny" \
-    --add-combo="Язык" \
-    --combo-values="auto|ru|en|uk|de|fr|es|zh|ja|ko|ar|tr|pl" \
-    --add-combo="Формат" \
-    --combo-values="txt + srt|только txt|только srt" \
-    --width=360 2>/dev/null) || exit 0
+MODEL=$("$PYTHON_VENV" "$SCRIPTS_ROOT/.meta/pick.py" \
+    "Модель Whisper" \
+    "${#FILES[@]} файл(ов) — чем больше модель, тем точнее" \
+    "large-v3-turbo|Лучший баланс скорости и качества" \
+    "large-v3|Максимальное качество, медленнее" \
+    "medium|Среднее качество, быстро" \
+    "small|Базовое качество, очень быстро" \
+    "base|Минимальное качество, мгновенно" \
+    "tiny|Черновик, только для теста") || exit 0
 
-MODEL=$(echo "$OPTIONS" | cut -d'|' -f1)
-LANG=$(echo  "$OPTIONS" | cut -d'|' -f2)
-FMT=$(echo   "$OPTIONS" | cut -d'|' -f3)
+LANG=$("$PYTHON_VENV" "$SCRIPTS_ROOT/.meta/pick.py" \
+    "Язык аудио" \
+    "Выберите язык или авто-определение" \
+    "auto|Определить автоматически" \
+    "ru|Русский" \
+    "en|English" \
+    "uk|Українська" \
+    "de|Deutsch" \
+    "fr|Français" \
+    "es|Español" \
+    "zh|中文" \
+    "ja|日本語" \
+    "ko|한국어" \
+    "ar|العربية" \
+    "tr|Türkçe" \
+    "pl|Polski") || exit 0
+
+FMT=$("$PYTHON_VENV" "$SCRIPTS_ROOT/.meta/pick.py" \
+    "Формат вывода" \
+    "Какие файлы создать рядом с аудио" \
+    "txt + srt|Текст и субтитры" \
+    "только txt|Только текст" \
+    "только srt|Только субтитры") || exit 0
 
 DO_TXT=false; DO_SRT=false
 [[ "$FMT" == "txt + srt"  ]] && DO_TXT=true && DO_SRT=true
 [[ "$FMT" == "только txt" ]] && DO_TXT=true
 [[ "$FMT" == "только srt" ]] && DO_SRT=true
 
-# Shared progress file
 PROGRESS_FILE=$(mktemp /tmp/whisper-progress-XXXXX)
 
-# GI typelib path for AppIndicator3
 export GI_TYPELIB_PATH="/usr/lib64/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
 
-# CUDA libs from nvidia-* packages inside the venv (self-contained, no external deps)
 NVIDIA_LIBS=$(find "$SCRIPT_DIR/.whisper/env" -type d -name "lib" -path "*/nvidia/*/lib" 2>/dev/null | tr '\n' ':')
 [[ -n "$NVIDIA_LIBS" ]] && export LD_LIBRARY_PATH="${NVIDIA_LIBS%:}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
-# Launch worker in background
 nohup "$PYTHON_WORK" "$WORKER" \
     "$PROGRESS_FILE" "$MODEL" "$LANG" "$DO_TXT" "$DO_SRT" "${FILES[@]}" \
     >/tmp/whisper-worker.log 2>&1 &
 
-# Launch indicator (blocks until transcription done, then exits)
-exec "$PYTHON_VENV" "$(dirname "$SCRIPT_DIR")/.meta/indicator.py" "$PROGRESS_FILE"
+exec "$PYTHON_VENV" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE"
