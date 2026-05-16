@@ -1,0 +1,7 @@
+#!/bin/bash
+# Opens Ptyxis in the current Nautilus directory
+
+dir="${NAUTILUS_SCRIPT_CURRENT_URI#file://}"
+dir=$(python3 -c "import urllib.parse, sys; print(urllib.parse.unquote(sys.argv[1]))" "$dir")
+
+ptyxis --new-window -d "$dir"

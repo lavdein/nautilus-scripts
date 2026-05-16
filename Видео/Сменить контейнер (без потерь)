@@ -1,0 +1,66 @@
+#!/bin/bash
+# Remux video into a different container without re-encoding — zero quality loss, near-instant
+
+mapfile -t files <<< "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"
+
+if [ ${#files[@]} -eq 0 ] || [ -z "${files[0]}" ]; then
+    zenity --error --title="Сменить контейнер" --text="Файлы не выбраны." --width=300
+    exit 1
+fi
+
+format=$(zenity --list \
+    --title="Сменить контейнер" \
+    --text="Перепаковка без перекодирования — качество 1 в 1, работает мгновенно.\nМожет не сработать если кодек несовместим с контейнером." \
+    --radiolist \
+    --column="" --column="Формат" --column="Описание" \
+    TRUE  "mp4"  "Широкая совместимость (H.264 / AAC)" \
+    FALSE "mkv"  "Matroska — принимает любые кодеки" \
+    FALSE "mov"  "Apple QuickTime / Final Cut" \
+    FALSE "avi"  "Старый формат Windows" \
+    --width=460 --height=280 2>/dev/null)
+
+[ -z "$format" ] && exit 0
+
+total=0
+for f in "${files[@]}"; do [ -n "$f" ] && total=$((total + 1)); done
+
+> /tmp/ffmpeg_errors.txt
+
+(
+i=0
+for input in "${files[@]}"; do
+    [ -z "$input" ] && continue
+    i=$((i + 1))
+    pct=$(( (i - 1) * 100 / total ))
+    filename=$(basename "$input")
+    echo "$pct"
+    echo "# ($i/$total) $filename"
+
+    base="${input%.*}"
+    output="$base.$format"
+    c=1
+    while [ -f "$output" ]; do
+        output="${base}_${c}.$format"
+        c=$((c + 1))
+    done
+
+    if ! ffmpeg -y -i "$input" -c copy "$output" 2>>/tmp/ffmpeg_errors.txt; then
+        echo "• $filename" >> /tmp/ffmpeg_errors.txt
+        rm -f "$output"
+    fi
+done
+echo "100"
+echo "# Готово"
+) | zenity --progress \
+    --title="Сменить контейнер" \
+    --text="Подготовка..." \
+    --percentage=0 --auto-close --width=420 2>/dev/null
+
+if grep -q "^•" /tmp/ffmpeg_errors.txt 2>/dev/null; then
+    zenity --warning --title="Сменить контейнер" \
+        --text="Не удалось перепаковать (кодек несовместим с контейнером):\n$(grep "^•" /tmp/ffmpeg_errors.txt)\n\nПодробности: /tmp/ffmpeg_errors.txt" \
+        --width=460
+else
+    zenity --info --title="Сменить контейнер" \
+        --text="Готово! Файлы сохранены рядом с оригиналами." --width=300
+fi

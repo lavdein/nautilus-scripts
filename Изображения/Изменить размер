@@ -1,0 +1,117 @@
+#!/bin/bash
+# Resize images — by percent, fixed width/height, or preset
+
+mapfile -t files <<< "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"
+
+if [ ${#files[@]} -eq 0 ] || [ -z "${files[0]}" ]; then
+    zenity --error --title="Изменить размер" --text="Файлы не выбраны." --width=300
+    exit 1
+fi
+
+mode=$(zenity --list \
+    --title="Изменить размер" \
+    --text="Способ изменения размера:" \
+    --radiolist \
+    --column="" --column="Режим" --column="Описание" \
+    TRUE  "percent" "Процент от оригинала" \
+    FALSE "width"   "По ширине (высота пропорционально)" \
+    FALSE "height"  "По высоте (ширина пропорционально)" \
+    FALSE "preset"  "Готовые пресеты" \
+    --width=440 --height=280 2>/dev/null)
+
+[ -z "$mode" ] && exit 0
+
+resize_arg=""
+suffix=""
+
+case "$mode" in
+    percent)
+        val=$(zenity --entry \
+            --title="Изменить размер" \
+            --text="Процент (например: 50 — вдвое меньше, 200 — вдвое больше):" \
+            --entry-text="50" --width=360 2>/dev/null)
+        [ -z "$val" ] && exit 0
+        resize_arg="${val}%"
+        suffix="_${val}pct"
+        ;;
+    width)
+        val=$(zenity --entry \
+            --title="Изменить размер" \
+            --text="Ширина в пикселях:" \
+            --entry-text="1920" --width=360 2>/dev/null)
+        [ -z "$val" ] && exit 0
+        resize_arg="${val}x"
+        suffix="_w${val}"
+        ;;
+    height)
+        val=$(zenity --entry \
+            --title="Изменить размер" \
+            --text="Высота в пикселях:" \
+            --entry-text="1080" --width=360 2>/dev/null)
+        [ -z "$val" ] && exit 0
+        resize_arg="x${val}"
+        suffix="_h${val}"
+        ;;
+    preset)
+        val=$(zenity --list \
+            --title="Изменить размер" \
+            --radiolist \
+            --column="" --column="Пресет" --column="" \
+            TRUE  "1920x1080" "Full HD" \
+            FALSE "1280x720"  "HD 720p" \
+            FALSE "3840x2160" "4K UHD" \
+            FALSE "800x600"   "Веб / превью" \
+            FALSE "512x512"   "Квадрат 512px" \
+            FALSE "256x256"   "Иконка 256px" \
+            --width=400 --height=300 2>/dev/null)
+        [ -z "$val" ] && exit 0
+        resize_arg="${val}"
+        suffix="_${val//x/_}"
+        ;;
+esac
+
+total=0
+for f in "${files[@]}"; do [ -n "$f" ] && total=$((total + 1)); done
+
+> /tmp/magick_errors.txt
+
+(
+i=0
+for input in "${files[@]}"; do
+    [ -z "$input" ] && continue
+    i=$((i + 1))
+    pct=$(( (i - 1) * 100 / total ))
+    dir=$(dirname "$input")
+    filename=$(basename "$input")
+    ext="${filename##*.}"
+    base="${filename%.*}"
+    echo "$pct"
+    echo "# ($i/$total) $filename"
+
+    output="$dir/${base}${suffix}.${ext}"
+    c=1
+    while [ -f "$output" ]; do
+        output="$dir/${base}${suffix}_${c}.${ext}"
+        c=$((c + 1))
+    done
+
+    if ! magick "$input" -resize "$resize_arg" "$output" 2>>/tmp/magick_errors.txt; then
+        echo "• $filename" >> /tmp/magick_errors.txt
+        rm -f "$output"
+    fi
+done
+echo "100"
+echo "# Готово"
+) | zenity --progress \
+    --title="Изменить размер" \
+    --text="Подготовка..." \
+    --percentage=0 --auto-close --width=420 2>/dev/null
+
+if grep -q "^•" /tmp/magick_errors.txt 2>/dev/null; then
+    zenity --error --title="Изменить размер" \
+        --text="Не удалось обработать:\n$(grep "^•" /tmp/magick_errors.txt)\n\nПодробности: /tmp/magick_errors.txt" \
+        --width=400
+else
+    zenity --info --title="Изменить размер" \
+        --text="Готово! Файлы сохранены рядом с оригиналами." --width=300
+fi

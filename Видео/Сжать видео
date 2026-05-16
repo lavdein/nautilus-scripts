@@ -1,0 +1,77 @@
+#!/bin/bash
+# Compress video with quality/size presets using H.264
+
+mapfile -t files <<< "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"
+
+if [ ${#files[@]} -eq 0 ] || [ -z "${files[0]}" ]; then
+    zenity --error --title="Сжать видео" --text="Файлы не выбраны." --width=300
+    exit 1
+fi
+
+preset=$(zenity --list \
+    --title="Сжать видео" \
+    --text="Выберите степень сжатия:" \
+    --radiolist \
+    --column="" --column="Пресет" --column="Описание" \
+    TRUE  "hq"   "Высокое качество — файл ~40-50% меньше" \
+    FALSE "bal"  "Баланс — файл ~60-70% меньше" \
+    FALSE "web"  "Для интернета — файл ~75-85% меньше" \
+    FALSE "tiny" "Минимальный размер — заметная потеря качества" \
+    --width=460 --height=280 2>/dev/null)
+
+[ -z "$preset" ] && exit 0
+
+case "$preset" in
+    hq)   crf=20; speed="slow" ;;
+    bal)  crf=26; speed="medium" ;;
+    web)  crf=30; speed="fast" ;;
+    tiny) crf=36; speed="veryfast" ;;
+esac
+
+total=0
+for f in "${files[@]}"; do [ -n "$f" ] && total=$((total + 1)); done
+
+> /tmp/ffmpeg_errors.txt
+
+(
+i=0
+for input in "${files[@]}"; do
+    [ -z "$input" ] && continue
+    i=$((i + 1))
+    pct=$(( (i - 1) * 100 / total ))
+    dir=$(dirname "$input")
+    filename=$(basename "$input")
+    base="${filename%.*}"
+    echo "$pct"
+    echo "# ($i/$total) $filename"
+
+    output="$dir/${base}_compressed.mp4"
+    c=1
+    while [ -f "$output" ]; do
+        output="$dir/${base}_compressed_${c}.mp4"
+        c=$((c + 1))
+    done
+
+    if ! ffmpeg -y -i "$input" \
+        -c:v libx264 -crf "$crf" -preset "$speed" \
+        -c:a aac -b:a 128k \
+        "$output" 2>>/tmp/ffmpeg_errors.txt; then
+        echo "• $filename" >> /tmp/ffmpeg_errors.txt
+        rm -f "$output"
+    fi
+done
+echo "100"
+echo "# Готово"
+) | zenity --progress \
+    --title="Сжать видео" \
+    --text="Подготовка..." \
+    --percentage=0 --auto-close --width=420 2>/dev/null
+
+if grep -q "^•" /tmp/ffmpeg_errors.txt 2>/dev/null; then
+    zenity --error --title="Сжать видео" \
+        --text="Не удалось сжать:\n$(grep "^•" /tmp/ffmpeg_errors.txt)\n\nПодробности: /tmp/ffmpeg_errors.txt" \
+        --width=400
+else
+    zenity --info --title="Сжать видео" \
+        --text="Готово! Файлы сохранены рядом с оригиналами." --width=300
+fi

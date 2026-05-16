@@ -1,0 +1,9 @@
+# Python virtual environments
+**/.whisper/env/
+
+# Downloaded AI models
+**/.whisper/models/
+
+# Temp files
+*.log
+*.tmp
