@@ -1,105 +1,55 @@
-#!/bin/bash
-# Convert images to another format without quality loss (lossless where possible)
+#!/usr/bin/env bash
+set -eo pipefail
+
+SCRIPTS_ROOT="$(dirname "$(dirname "$(realpath "$0")")")"
+PYTHON="/usr/bin/python3"
 
 mapfile -t files <<< "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"
 
 if [ ${#files[@]} -eq 0 ] || [ -z "${files[0]}" ]; then
-    zenity --error --title="Конвертировать изображения" --text="Файлы не выбраны." --width=300
+    notify-send "Конвертировать в формат" "Файлы не выбраны." -i dialog-error
     exit 1
 fi
 
-format=$(zenity --list \
-    --title="Конвертировать изображения" \
-    --text="Выберите формат вывода:" \
-    --radiolist \
-    --column="" --column="Формат" --column="Описание" \
-    TRUE  "png"  "PNG — без потерь, прозрачность" \
-    FALSE "jpg"  "JPEG — фото, малый размер" \
-    FALSE "webp" "WebP — веб, малый размер + прозрачность" \
-    FALSE "avif" "AVIF — новый формат, лучшее сжатие" \
-    FALSE "gif"  "GIF — анимация / совместимость" \
-    FALSE "bmp"  "BMP — без сжатия" \
-    FALSE "tiff" "TIFF — полиграфия / архив" \
-    FALSE "ico"  "ICO — иконка Windows" \
-    --width=440 --height=340 2>/dev/null)
+format=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
+    "Конвертировать в формат" \
+    "Выберите формат вывода" \
+    "PNG|Без потерь, поддержка прозрачности" \
+    "JPG|Фото, малый размер" \
+    "WEBP|Веб — малый размер и прозрачность" \
+    "AVIF|Новый формат, лучшее сжатие" \
+    "GIF|Анимация / совместимость" \
+    "TIFF|Полиграфия / архив" \
+    "ICO|Иконка Windows") || exit 0
 
-[ -z "$format" ] && exit 0
-
-quality_args=()
+format="${format,,}"
+quality=""
 
 if [ "$format" = "jpg" ]; then
-    quality=$(zenity --list \
-        --title="Качество JPEG" \
-        --radiolist \
-        --column="" --column="Качество" --column="" \
-        TRUE  "95" "Высокое (почти без потерь)" \
-        FALSE "85" "Хорошее (рекомендуется)" \
-        FALSE "75" "Среднее (меньше файл)" \
-        FALSE "60" "Низкое (маленький файл)" \
-        --width=380 --height=250 2>/dev/null)
-    [ -z "$quality" ] && exit 0
-    quality_args=(-quality "$quality")
+    quality=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
+        "Качество JPEG" \
+        "Баланс между качеством и размером файла" \
+        "95|Высокое — почти без потерь" \
+        "85|Хорошее — рекомендуется" \
+        "75|Среднее — меньше файл" \
+        "60|Низкое — маленький файл") || exit 0
 fi
 
 if [ "$format" = "webp" ]; then
-    quality=$(zenity --list \
-        --title="Качество WebP" \
-        --radiolist \
-        --column="" --column="Режим" --column="" \
-        TRUE  "lossless" "Без потерь (больше файл)" \
-        FALSE "90"       "Высокое качество" \
-        FALSE "80"       "Хорошее качество" \
-        FALSE "70"       "Среднее качество" \
-        --width=380 --height=250 2>/dev/null)
-    [ -z "$quality" ] && exit 0
-    if [ "$quality" = "lossless" ]; then
-        quality_args=(-define webp:lossless=true)
-    else
-        quality_args=(-quality "$quality")
-    fi
+    quality=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
+        "Качество WebP" \
+        "Режим сжатия" \
+        "lossless|Без потерь — больше файл" \
+        "90|Высокое качество" \
+        "80|Хорошее качество" \
+        "70|Среднее качество") || exit 0
 fi
 
-total=0
-for f in "${files[@]}"; do [ -n "$f" ] && total=$((total + 1)); done
+PROGRESS_FILE=$(mktemp /tmp/img-convert-XXXXX)
+export GI_TYPELIB_PATH="/usr/lib64/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
 
-> /tmp/magick_errors.txt
+nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/magick_convert_worker.py" \
+    "$PROGRESS_FILE" "$format" "$quality" "${files[@]}" \
+    >/tmp/img-convert-worker.log 2>&1 &
 
-(
-i=0
-for input in "${files[@]}"; do
-    [ -z "$input" ] && continue
-    i=$((i + 1))
-    pct=$(( (i - 1) * 100 / total ))
-    dir=$(dirname "$input")
-    filename=$(basename "$input")
-    base="${filename%.*}"
-    echo "$pct"
-    echo "# ($i/$total) $filename"
-
-    output="$dir/$base.$format"
-    c=1
-    while [ -f "$output" ]; do
-        output="$dir/${base}_${c}.$format"
-        c=$((c + 1))
-    done
-
-    if ! magick "$input" "${quality_args[@]}" "$output" 2>>/tmp/magick_errors.txt; then
-        echo "• $filename" >> /tmp/magick_errors.txt
-        rm -f "$output"
-    fi
-done
-echo "100"
-echo "# Готово"
-) | zenity --progress \
-    --title="Конвертировать изображения" \
-    --text="Подготовка..." \
-    --percentage=0 --auto-close --width=420 2>/dev/null
-
-if grep -q "^•" /tmp/magick_errors.txt 2>/dev/null; then
-    zenity --error --title="Конвертировать изображения" \
-        --text="Не удалось конвертировать:\n$(grep "^•" /tmp/magick_errors.txt)\n\nПодробности: /tmp/magick_errors.txt" \
-        --width=400
-else
-    zenity --info --title="Конвертировать изображения" \
-        --text="Готово! Файлы сохранены рядом с оригиналами." --width=300
-fi
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE"
