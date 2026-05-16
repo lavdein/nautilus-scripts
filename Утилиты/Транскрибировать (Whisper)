@@ -22,39 +22,17 @@ if [[ ${#FILES[@]} -eq 0 ]]; then
     exit 1
 fi
 
-MODEL=$("$PYTHON_VENV" "$SCRIPTS_ROOT/.meta/pick.py" \
-    "Модель Whisper" \
-    "${#FILES[@]} файл(ов) — чем больше модель, тем точнее" \
-    "large-v3-turbo|Лучший баланс скорости и качества" \
-    "large-v3|Максимальное качество, медленнее" \
-    "medium|Среднее качество, быстро" \
-    "small|Базовое качество, очень быстро" \
-    "base|Минимальное качество, мгновенно" \
-    "tiny|Черновик, только для теста") || exit 0
+OPTIONS=$("$PYTHON_VENV" "$SCRIPTS_ROOT/.meta/form.py" \
+    "Транскрипция Whisper" \
+    "${#FILES[@]} файл(ов)" \
+    "Начать" \
+    "Модель:large-v3-turbo|large-v3|medium|small|base|tiny" \
+    "Язык:auto|ru|en|uk|de|fr|es|zh|ja|ko|ar|tr|pl" \
+    "Формат:txt + srt|только txt|только srt") || exit 0
 
-LANG=$("$PYTHON_VENV" "$SCRIPTS_ROOT/.meta/pick.py" \
-    "Язык аудио" \
-    "Выберите язык или авто-определение" \
-    "auto|Определить автоматически" \
-    "ru|Русский" \
-    "en|English" \
-    "uk|Українська" \
-    "de|Deutsch" \
-    "fr|Français" \
-    "es|Español" \
-    "zh|中文" \
-    "ja|日本語" \
-    "ko|한국어" \
-    "ar|العربية" \
-    "tr|Türkçe" \
-    "pl|Polski") || exit 0
-
-FMT=$("$PYTHON_VENV" "$SCRIPTS_ROOT/.meta/pick.py" \
-    "Формат вывода" \
-    "Какие файлы создать рядом с аудио" \
-    "txt + srt|Текст и субтитры" \
-    "только txt|Только текст" \
-    "только srt|Только субтитры") || exit 0
+MODEL=$(echo "$OPTIONS" | cut -d'|' -f1)
+LANG=$(echo  "$OPTIONS" | cut -d'|' -f2)
+FMT=$(echo   "$OPTIONS" | cut -d'|' -f3)
 
 DO_TXT=false; DO_SRT=false
 [[ "$FMT" == "txt + srt"  ]] && DO_TXT=true && DO_SRT=true
