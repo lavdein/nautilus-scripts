@@ -54,6 +54,8 @@ for i, src in enumerate(files):
     cmd = ["ffmpeg", "-y", "-i", src]
     if fps_val:
         cmd += ["-vf", f"fps={fps_val}"]
+    if fmt == "webp":
+        cmd += ["-f", "image2", "-c:v", "libwebp"]
 
     prog_tmp   = tempfile.mktemp(prefix="ffext_")
     stderr_tmp = tempfile.mktemp(prefix="ffext_err_")
