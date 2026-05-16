@@ -59,4 +59,4 @@ nohup "$PYTHON_WORK" "$WORKER" \
     >/tmp/whisper-worker.log 2>&1 &
 
 # Launch indicator (blocks until transcription done, then exits)
-exec "$PYTHON_VENV" "$INDICATOR" "$PROGRESS_FILE" "$(dirname "${FILES[0]}")"
+exec "$PYTHON_VENV" "$(dirname "$SCRIPT_DIR")/.meta/indicator.py" "$PROGRESS_FILE"

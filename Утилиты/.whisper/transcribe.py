@@ -14,8 +14,9 @@ total         = len(files)
 MODELS_DIR = str(Path(__file__).parent / "models")
 
 
-def set_progress(pct, label):
-    open(progress_file, "w").write(f"{pct}|{label}")
+def set_progress(pct, label, folder=""):
+    suffix = f"|{folder}" if folder else ""
+    open(progress_file, "w").write(f"{pct}|{label}{suffix}")
 
 
 def get_duration(path):
@@ -49,7 +50,7 @@ for idx, file_path in enumerate(files):
     name     = path.name
     base_pct = idx * 100 // total
 
-    set_progress(base_pct, f"[{device}] {name}")
+    set_progress(base_pct, f"[{device}] {name}", str(path.parent))
 
     try:
         duration = get_duration(file_path)
@@ -80,7 +81,7 @@ for idx, file_path in enumerate(files):
         if duration and now - last_update >= UPDATE_INTERVAL:
             seg_pct   = seg.end / duration
             total_pct = int((idx + seg_pct) * 100 / total)
-            set_progress(total_pct, f"[{device}] {name}  {int(seg_pct * 100)}%")
+            set_progress(total_pct, f"[{device}] {name}  {int(seg_pct * 100)}%", str(path.parent))
             last_update = now
 
     if do_txt:
@@ -90,4 +91,5 @@ for idx, file_path in enumerate(files):
 
     set_progress((idx + 1) * 100 // total, f"✓ {name}")
 
-open(progress_file, "w").write(f"DONE|Готово — {total} файл(ов)")
+all_dirs = list(dict.fromkeys(str(Path(f).parent) for f in files))
+open(progress_file, "w").write(f"DONE|Готово — {total} файл(ов)|{':'.join(all_dirs)}")

@@ -25,8 +25,9 @@ AUDIO_FALLBACK = {
 }
 
 
-def write(pct, label):
-    Path(progress_file).write_text(f"{pct}|{label}")
+def write(pct, label, folder=""):
+    suffix = f"|{folder}" if folder else ""
+    Path(progress_file).write_text(f"{pct}|{label}{suffix}")
 
 
 def probe(path):
@@ -66,7 +67,7 @@ for i, src in enumerate(files):
         c += 1
 
     dur_us, audio_codec = probe(src)
-    write(i * 100 // total, f"({i+1}/{total}) {name}")
+    write(i * 100 // total, f"({i+1}/{total}) {name}", str(parent))
 
     # Decide audio handling
     need_transcode = audio_codec in INCOMPATIBLE_AUDIO.get(fmt, set())
@@ -101,7 +102,7 @@ for i, src in enumerate(files):
                     us = int(line.split("=")[1])
                     if dur_us > 0:
                         file_pct = min(99, us * 100 // dur_us)
-                        write((i * 100 + file_pct) // total, f"({i+1}/{total}) {name}")
+                        write((i * 100 + file_pct) // total, f"({i+1}/{total}) {name}", str(parent))
                     break
         except Exception:
             pass
@@ -124,7 +125,8 @@ if errors:
     subprocess.run(["notify-send", "Сменить контейнер", body, "-i", "dialog-warning"])
     write(100, f"Ошибок: {len(errors)}")
 else:
-    note = f" (аудио → {'AAC' if fmt != 'avi' else 'MP3'})" if transcoded_files else ""
+    note      = f" (аудио → {'AAC' if fmt != 'avi' else 'MP3'})" if transcoded_files else ""
+    all_dirs  = list(dict.fromkeys(str(Path(f).parent) for f in files))
     Path(progress_file).write_text(
-        f"DONE|Готово: {total} файл(ов) → {fmt.upper()}{note}"
+        f"DONE|Готово: {total} файл(ов) → {fmt.upper()}{note}|{':'.join(all_dirs)}"
     )

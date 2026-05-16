@@ -42,4 +42,4 @@ nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/ffmpeg_remux_worker.py" \
     "$PROGRESS_FILE" "$format" "${valid_files[@]}" \
     >/tmp/ffremux-worker.log 2>&1 &
 
-exec "$PYTHON" "$SCRIPTS_ROOT/Утилиты/.whisper/indicator.py" "$PROGRESS_FILE" "$(dirname "${valid_files[0]}")"
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE"
