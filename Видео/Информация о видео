@@ -1,28 +1,31 @@
-#!/bin/bash
-# Show detailed video/audio stream info via ffprobe
+#!/usr/bin/env bash
+set -eo pipefail
+
+SCRIPTS_ROOT="$(dirname "$(dirname "$(realpath "$0")")")"
+PYTHON="/usr/bin/python3"
 
 IFS=$'\n' read -ra files <<< "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"
 input="${files[0]}"
 
 if [ -z "$input" ]; then
-    zenity --error --title="Информация о видео" --text="Файл не выбран." --width=300
+    notify-send "Информация о видео" "Файл не выбран." -i dialog-error
     exit 1
 fi
 
-info=$(ffprobe -v quiet -print_format json -show_format -show_streams "$input" 2>/dev/null | python3 -c "
+ffprobe -v quiet -print_format json -show_format -show_streams "$input" 2>/dev/null \
+| "$PYTHON" -c "
 import json, sys
 
 data = json.load(sys.stdin)
-fmt = data.get('format', {})
+fmt     = data.get('format', {})
 streams = data.get('streams', [])
+lines   = []
 
-lines = []
 lines.append('Файл: ' + fmt.get('filename', '').split('/')[-1])
 
 dur = float(fmt.get('duration', 0))
-hh = int(dur // 3600)
-mm = int((dur % 3600) // 60)
-ss = int(dur % 60)
+hh, rem = divmod(int(dur), 3600)
+mm, ss  = divmod(rem, 60)
 lines.append(f'Длительность: {hh:02d}:{mm:02d}:{ss:02d}')
 
 size = int(fmt.get('size', 0))
@@ -36,36 +39,28 @@ else:
 br = int(fmt.get('bit_rate', 0))
 lines.append(f'Общий битрейт: {br//1000} кбит/с')
 
-for stream in streams:
+for s in streams:
     lines.append('')
-    if stream.get('codec_type') == 'video':
+    if s.get('codec_type') == 'video':
         lines.append('[ Видео ]')
-        lines.append('  Кодек:      ' + stream.get('codec_name', '?').upper())
-        lines.append(f'  Разрешение: {stream.get(\"width\",\"?\")}x{stream.get(\"height\",\"?\")}')
-        r = stream.get('r_frame_rate', '0/1').split('/')
-        fps = round(int(r[0]) / int(r[1]), 2) if len(r) == 2 and int(r[1]) > 0 else 0
+        lines.append('  Кодек:      ' + s.get('codec_name','?').upper())
+        lines.append(f'  Разрешение: {s.get(\"width\",\"?\")}×{s.get(\"height\",\"?\")}')
+        r = s.get('r_frame_rate','0/1').split('/')
+        fps = round(int(r[0])/int(r[1]),2) if len(r)==2 and int(r[1])>0 else 0
         lines.append(f'  FPS:        {fps}')
-        vbr = int(stream.get('bit_rate', 0))
-        if vbr:
-            lines.append(f'  Битрейт:    {vbr//1000} кбит/с')
-        pix = stream.get('pix_fmt', '')
-        if pix:
-            lines.append(f'  Пиксели:    {pix}')
-    elif stream.get('codec_type') == 'audio':
+        vbr = int(s.get('bit_rate', 0))
+        if vbr: lines.append(f'  Битрейт:    {vbr//1000} кбит/с')
+        pix = s.get('pix_fmt','')
+        if pix: lines.append(f'  Пиксели:    {pix}')
+    elif s.get('codec_type') == 'audio':
         lines.append('[ Аудио ]')
-        lines.append('  Кодек:    ' + stream.get('codec_name', '?').upper())
-        ch = stream.get('channels', '?')
-        chl = stream.get('channel_layout', '')
+        lines.append('  Кодек:    ' + s.get('codec_name','?').upper())
+        ch  = s.get('channels','?')
+        chl = s.get('channel_layout','')
         lines.append(f'  Каналы:   {ch}' + (f' ({chl})' if chl else ''))
-        lines.append(f'  Частота:  {stream.get(\"sample_rate\",\"?\")} Гц')
-        abr = int(stream.get('bit_rate', 0))
-        if abr:
-            lines.append(f'  Битрейт:  {abr//1000} кбит/с')
+        lines.append(f'  Частота:  {s.get(\"sample_rate\",\"?\")} Гц')
+        abr = int(s.get('bit_rate', 0))
+        if abr: lines.append(f'  Битрейт:  {abr//1000} кбит/с')
 
 print('\n'.join(lines))
-")
-
-zenity --info \
-    --title="Информация о видео" \
-    --text="$info" \
-    --width=400 --height=360 2>/dev/null
+" | "$PYTHON" "$SCRIPTS_ROOT/.meta/show_info.py" "Информация о видео"

@@ -1,10 +1,13 @@
-#!/bin/bash
-# Create zip / tar.gz / tar.xz archive from selected files
+#!/usr/bin/env bash
+set -eo pipefail
+
+SCRIPTS_ROOT="$(dirname "$(dirname "$(realpath "$0")")")"
+PYTHON="/usr/bin/python3"
 
 mapfile -t files <<< "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"
 
 if [ ${#files[@]} -eq 0 ] || [ -z "${files[0]}" ]; then
-    zenity --error --title="Создать архив" --text="Файлы не выбраны." --width=300
+    notify-send "Создать архив" "Файлы не выбраны." -i dialog-error
     exit 1
 fi
 
@@ -17,19 +20,15 @@ name=$(zenity --entry \
     --title="Создать архив" \
     --text="Имя архива (без расширения):" \
     --entry-text="$default_name" \
-    --width=380 2>/dev/null)
+    --width=380 2>/dev/null) || exit 0
 [ -z "$name" ] && exit 0
 
-format=$(zenity --list \
-    --title="Создать архив" \
-    --text="Формат:" \
-    --radiolist \
-    --column="" --column="Формат" --column="Описание" \
-    TRUE  "zip"    "ZIP — универсальный, открывается везде" \
-    FALSE "tar.gz" "TAR.GZ — хорошее сжатие, быстро" \
-    FALSE "tar.xz" "TAR.XZ — максимальное сжатие, медленнее" \
-    --width=420 --height=260 2>/dev/null)
-[ -z "$format" ] && exit 0
+format=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
+    "Формат архива" \
+    "Выберите формат сжатия" \
+    "zip|Универсальный, открывается везде" \
+    "tar.gz|Хорошее сжатие, быстро" \
+    "tar.xz|Максимальное сжатие, медленнее") || exit 0
 
 output="$parent/$name.$format"
 c=1
@@ -43,19 +42,11 @@ for f in "${files[@]}"; do
     [ -n "$f" ] && names+=("$(basename "$f")")
 done
 
-cd "$parent" || exit 1
+PROGRESS_FILE=$(mktemp /tmp/archive-XXXXX)
+export GI_TYPELIB_PATH="/usr/lib64/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
 
-case "$format" in
-    zip)    zip -r "$output" "${names[@]}" 2>/tmp/archive_err.txt ;;
-    tar.gz) tar -czf "$output" "${names[@]}" 2>/tmp/archive_err.txt ;;
-    tar.xz) tar -cJf "$output" "${names[@]}" 2>/tmp/archive_err.txt ;;
-esac
+nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/archive_worker.py" \
+    "$PROGRESS_FILE" "$output" "$format" "${names[@]}" \
+    >/tmp/archive-worker.log 2>&1 &
 
-if [ $? -eq 0 ]; then
-    size=$(du -sh "$output" | cut -f1)
-    zenity --info --title="Архив создан" \
-        --text="$(basename "$output")\nРазмер: $size" --width=320
-else
-    zenity --error --title="Ошибка" \
-        --text="Не удалось создать архив.\nПодробности: /tmp/archive_err.txt" --width=360
-fi
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE"

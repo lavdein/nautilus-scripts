@@ -8,15 +8,18 @@ Usage:
 Prints chosen label (part before |) to stdout.
 Exit 0 = picked, exit 1 = cancelled.
 """
-import sys
-import gi
-gi.require_version('Gtk', '4.0')
-gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw
 
-title       = sys.argv[1]
+import sys
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Adw, Gtk
+
+title = sys.argv[1]
 description = sys.argv[2] if len(sys.argv) > 2 else ""
-options     = sys.argv[3:]
+options = sys.argv[3:]
 
 selected = []
 
@@ -79,7 +82,7 @@ class PickApp(Adw.Application):
 
         for opt in options:
             parts = opt.split("|", 1)
-            label_text    = parts[0]
+            label_text = parts[0]
             subtitle_text = parts[1] if len(parts) > 1 else ""
 
             row = Adw.ActionRow(title=label_text, activatable=True)

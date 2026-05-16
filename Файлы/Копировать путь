@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copy full file path(s) to clipboard
 
 mapfile -t files <<< "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"
@@ -13,7 +13,7 @@ done
 paths="${paths%$'\n'}"
 
 if [ $count -eq 0 ]; then
-    zenity --error --text="Файлы не выбраны." --width=280
+    notify-send "Копировать путь" "Файлы не выбраны." -i dialog-error
     exit 1
 fi
 
@@ -24,14 +24,12 @@ elif command -v xclip &>/dev/null; then
 elif command -v xsel &>/dev/null; then
     printf '%s' "$paths" | xsel --clipboard --input
 else
-    zenity --error --text="Не найден инструмент буфера обмена (wl-copy/xclip/xsel)." --width=340
+    notify-send "Копировать путь" "Не найден wl-copy / xclip / xsel." -i dialog-error
     exit 1
 fi
 
 if [ $count -eq 1 ]; then
-    msg="Путь скопирован:\n$paths"
+    notify-send "Путь скопирован" "$paths" -i edit-copy
 else
-    msg="Скопировано путей: $count"
+    notify-send "Пути скопированы" "$count файла(ов)" -i edit-copy
 fi
-
-zenity --info --title="Путь скопирован" --text="$msg" --timeout=2 --width=300 2>/dev/null

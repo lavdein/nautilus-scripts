@@ -1,7 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Opens Ptyxis in the current Nautilus directory
 
 dir="${NAUTILUS_SCRIPT_CURRENT_URI#file://}"
-dir=$(python3 -c "import urllib.parse, sys; print(urllib.parse.unquote(sys.argv[1]))" "$dir")
+dir=$(/usr/bin/python3 -c "import urllib.parse, sys; print(urllib.parse.unquote(sys.argv[1]))" "$dir")
+
+if ! command -v ptyxis &>/dev/null; then
+    notify-send "Открыть терминал" "Ptyxis не найден." -i dialog-error
+    exit 1
+fi
 
 ptyxis --new-window -d "$dir"

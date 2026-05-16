@@ -1,77 +1,32 @@
-#!/bin/bash
-# Extract audio from video files
+#!/usr/bin/env bash
+set -eo pipefail
+
+SCRIPTS_ROOT="$(dirname "$(dirname "$(realpath "$0")")")"
+PYTHON="/usr/bin/python3"
 
 mapfile -t files <<< "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"
 
 if [ ${#files[@]} -eq 0 ] || [ -z "${files[0]}" ]; then
-    zenity --error --title="Извлечь звук" --text="Файлы не выбраны." --width=300
+    notify-send "Извлечь звук" "Файлы не выбраны." -i dialog-error
     exit 1
 fi
 
-format=$(zenity --list \
-    --title="Извлечь звук" \
-    --text="Выберите формат аудио:" \
-    --radiolist \
-    --column="" --column="Формат" --column="Описание" \
-    TRUE  "mp3"  "MP3 — универсальный, ~192 кбит/с" \
-    FALSE "aac"  "AAC — хорошее качество, компактный" \
-    FALSE "flac" "FLAC — без потерь, большой размер" \
-    FALSE "ogg"  "OGG Vorbis — свободный формат" \
-    FALSE "wav"  "WAV — без потерь, несжатый" \
-    --width=460 --height=300 2>/dev/null)
+format=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
+    "Извлечь звук" \
+    "Выберите формат аудио" \
+    "MP3|Универсальный, ~192 кбит/с" \
+    "AAC|Хорошее качество, компактный" \
+    "FLAC|Без потерь, большой размер" \
+    "OGG|Свободный формат Vorbis" \
+    "WAV|Без потерь, несжатый") || exit 0
 
-[ -z "$format" ] && exit 0
+format="${format,,}"
 
-total=0
-for f in "${files[@]}"; do [ -n "$f" ] && total=$((total + 1)); done
+PROGRESS_FILE=$(mktemp /tmp/extract-audio-XXXXX)
+export GI_TYPELIB_PATH="/usr/lib64/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
 
-> /tmp/ffmpeg_audio_errors.txt
+nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/ffmpeg_audio_worker.py" \
+    "$PROGRESS_FILE" "$format" "${files[@]}" \
+    >/tmp/extract-audio-worker.log 2>&1 &
 
-(
-i=0
-for input in "${files[@]}"; do
-    [ -z "$input" ] && continue
-    i=$((i + 1))
-    pct=$(( (i - 1) * 100 / total ))
-    dir=$(dirname "$input")
-    filename=$(basename "$input")
-    base="${filename%.*}"
-    echo "$pct"
-    echo "# ($i/$total) $filename"
-
-    output="$dir/${base}.$format"
-    c=1
-    while [ -f "$output" ]; do
-        output="$dir/${base}_${c}.$format"
-        c=$((c + 1))
-    done
-
-    case "$format" in
-        mp3)  codec_args="-c:a libmp3lame -q:a 2" ;;
-        aac)  codec_args="-c:a aac -b:a 192k" ;;
-        flac) codec_args="-c:a flac" ;;
-        ogg)  codec_args="-c:a libvorbis -q:a 6" ;;
-        wav)  codec_args="-c:a pcm_s16le" ;;
-    esac
-
-    if ! ffmpeg -y -i "$input" -vn $codec_args \
-        "$output" 2>>/tmp/ffmpeg_audio_errors.txt; then
-        echo "• $filename" >> /tmp/ffmpeg_audio_errors.txt
-        rm -f "$output"
-    fi
-done
-echo "100"
-echo "# Готово"
-) | zenity --progress \
-    --title="Извлечь звук" \
-    --text="Подготовка..." \
-    --percentage=0 --auto-close --width=420 2>/dev/null
-
-if grep -q "^•" /tmp/ffmpeg_audio_errors.txt 2>/dev/null; then
-    zenity --error --title="Извлечь звук" \
-        --text="Не удалось обработать:\n$(grep "^•" /tmp/ffmpeg_audio_errors.txt)\n\nПодробности: /tmp/ffmpeg_audio_errors.txt" \
-        --width=400
-else
-    zenity --info --title="Извлечь звук" \
-        --text="Готово! Файлы сохранены рядом с оригиналами." --width=300
-fi
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE"
