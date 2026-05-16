@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-import gi, sys, os
+import gi, sys, os, subprocess
 gi.require_version('AppIndicator3', '0.1')
 gi.require_version('Gtk', '3.0')
 from gi.repository import AppIndicator3, Gtk, GLib
 
 progress_file = sys.argv[1]
+output_dir    = sys.argv[2] if len(sys.argv) > 2 else None
 
 SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 tick = [0]
@@ -19,10 +20,14 @@ indicator.set_label(f"{SPINNER[0]}  0%", "⠏ 100%")
 
 menu = Gtk.Menu()
 item_info = Gtk.MenuItem(label="Подготовка...")
+item_open = Gtk.MenuItem(label="Открыть папку")
+item_open.set_sensitive(bool(output_dir))
+if output_dir:
+    item_open.connect("activate", lambda _: subprocess.Popen(["xdg-open", output_dir]))
 item_sep  = Gtk.SeparatorMenuItem()
 item_quit = Gtk.MenuItem(label="Отменить")
 item_quit.connect("activate", lambda _: Gtk.main_quit())
-for w in (item_info, item_sep, item_quit):
+for w in (item_info, item_open, item_sep, item_quit):
     menu.append(w)
 menu.show_all()
 indicator.set_menu(menu)
