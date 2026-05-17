@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+Whisper transcription worker.
+Usage: whisper_worker.py progress_file model lang do_txt do_srt models_dir file1 ...
+"""
 import sys, json, time, subprocess
 from pathlib import Path
 from faster_whisper import WhisperModel
@@ -8,15 +12,14 @@ model_id      = sys.argv[2]
 lang          = None if sys.argv[3] == "auto" else sys.argv[3]
 do_txt        = sys.argv[4] == "true"
 do_srt        = sys.argv[5] == "true"
-files         = sys.argv[6:]
+models_dir    = sys.argv[6]
+files         = sys.argv[7:]
 total         = len(files)
 
-MODELS_DIR = str(Path(__file__).parent / "models")
 
-
-def set_progress(pct, label, folder=""):
+def write(pct, label, folder=""):
     suffix = f"|{folder}" if folder else ""
-    open(progress_file, "w").write(f"{pct}|{label}{suffix}")
+    Path(progress_file).write_text(f"{pct}|{label}{suffix}")
 
 
 def get_duration(path):
@@ -33,13 +36,13 @@ def fmt_ts(t):
     return f"{int(h):02d}:{int(m):02d}:{int(s):02d},{int((s % 1) * 1000):03d}"
 
 
-set_progress(0, "Загрузка модели...")
+write(0, "Загрузка модели...")
 
 try:
-    model  = WhisperModel(model_id, device="cuda", compute_type="float16", download_root=MODELS_DIR)
+    model  = WhisperModel(model_id, device="cuda", compute_type="float16", download_root=models_dir)
     device = "GPU"
 except Exception:
-    model  = WhisperModel(model_id, device="cpu", compute_type="int8", download_root=MODELS_DIR)
+    model  = WhisperModel(model_id, device="cpu", compute_type="int8", download_root=models_dir)
     device = "CPU"
 
 UPDATE_INTERVAL = 1.5
@@ -50,7 +53,7 @@ for idx, file_path in enumerate(files):
     name     = path.name
     base_pct = idx * 100 // total
 
-    set_progress(base_pct, f"[{device}] {name}", str(path.parent))
+    write(base_pct, f"[{device}] {name}", str(path.parent))
 
     try:
         duration = get_duration(file_path)
@@ -81,7 +84,7 @@ for idx, file_path in enumerate(files):
         if duration and now - last_update >= UPDATE_INTERVAL:
             seg_pct   = seg.end / duration
             total_pct = int((idx + seg_pct) * 100 / total)
-            set_progress(total_pct, f"[{device}] {name}  {int(seg_pct * 100)}%", str(path.parent))
+            write(total_pct, f"[{device}] {name}  {int(seg_pct * 100)}%", str(path.parent))
             last_update = now
 
     if do_txt:
@@ -89,7 +92,7 @@ for idx, file_path in enumerate(files):
     if do_srt:
         (out.parent / (out.name + ".srt")).write_text("\n".join(srt_parts), encoding="utf-8")
 
-    set_progress((idx + 1) * 100 // total, f"✓ {name}")
+    write((idx + 1) * 100 // total, f"✓ {name}", str(path.parent))
 
 all_dirs = list(dict.fromkeys(str(Path(f).parent) for f in files))
-open(progress_file, "w").write(f"DONE|Готово — {total} файл(ов)|{':'.join(all_dirs)}")
+Path(progress_file).write_text(f"DONE|Готово: {total} файл(ов)|{':'.join(all_dirs)}")

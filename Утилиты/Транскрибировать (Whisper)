@@ -5,7 +5,7 @@ SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 SCRIPTS_ROOT="$(dirname "$SCRIPT_DIR")"
 PYTHON_VENV="/usr/bin/python3"
 PYTHON_WORK="$SCRIPT_DIR/.whisper/env/bin/python3"
-WORKER="$SCRIPT_DIR/.whisper/transcribe.py"
+MODELS_DIR="$SCRIPT_DIR/.whisper/models"
 
 AUDIO_EXT="mp3|wav|flac|ogg|m4a|aac|opus|wma"
 VIDEO_EXT="mp4|mkv|avi|mov|webm|flv|ts|m2ts"
@@ -40,14 +40,13 @@ DO_TXT=false; DO_SRT=false
 [[ "$FMT" == "только srt" ]] && DO_SRT=true
 
 PROGRESS_FILE=$(mktemp /tmp/whisper-progress-XXXXX)
-
 export GI_TYPELIB_PATH="/usr/lib64/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
 
 NVIDIA_LIBS=$(find "$SCRIPT_DIR/.whisper/env" -type d -name "lib" -path "*/nvidia/*/lib" 2>/dev/null | tr '\n' ':')
 [[ -n "$NVIDIA_LIBS" ]] && export LD_LIBRARY_PATH="${NVIDIA_LIBS%:}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
-nohup "$PYTHON_WORK" "$WORKER" \
-    "$PROGRESS_FILE" "$MODEL" "$LANG" "$DO_TXT" "$DO_SRT" "${FILES[@]}" \
+nohup "$PYTHON_WORK" "$SCRIPTS_ROOT/.meta/whisper_worker.py" \
+    "$PROGRESS_FILE" "$MODEL" "$LANG" "$DO_TXT" "$DO_SRT" "$MODELS_DIR" "${FILES[@]}" \
     >/tmp/whisper-worker.log 2>&1 &
 
 exec "$PYTHON_VENV" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Транскрипция Whisper"
