@@ -14,15 +14,17 @@ files         = [f for f in sys.argv[3:] if f]
 
 # ── Preset settings ───────────────────────────────────────────────────────────
 P = {
-    "Осторожно":  {"jpg": 88, "webp": 83, "png": 2, "crf": 24, "speed": "slow",  "audio": 192, "pdf": "/printer"},
-    "Баланс":     {"jpg": 82, "webp": 75, "png": 4, "crf": 28, "speed": "medium","audio": 128, "pdf": "/ebook"},
-    "Агрессивно": {"jpg": 70, "webp": 60, "png": 6, "crf": 32, "speed": "fast",  "audio":  96, "pdf": "/screen"},
+    "Осторожно":  {"jpg": 88, "webp": 83, "pngq": "75-90", "png": 2, "crf": 24, "speed": "slow",  "audio": 192, "pdf": "/printer"},
+    "Баланс":     {"jpg": 82, "webp": 75, "pngq": "60-80", "png": 4, "crf": 28, "speed": "medium","audio": 128, "pdf": "/ebook"},
+    "Агрессивно": {"jpg": 70, "webp": 60, "pngq": "40-65", "png": 6, "crf": 32, "speed": "fast",  "audio":  96, "pdf": "/screen"},
 }[preset]
 
-HAS_OXIPNG   = shutil.which("oxipng")
-HAS_OPTIPNG  = shutil.which("optipng")
-HAS_GIFSICLE = shutil.which("gifsicle")
-HAS_GS       = shutil.which("gs")
+HAS_PNGQUANT  = shutil.which("pngquant")
+HAS_OXIPNG    = shutil.which("oxipng")
+HAS_OPTIPNG   = shutil.which("optipng")
+HAS_JPEGOPTIM = shutil.which("jpegoptim")
+HAS_GIFSICLE  = shutil.which("gifsicle")
+HAS_GS        = shutil.which("gs")
 
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 VIDEO_EXT = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v"}
@@ -78,7 +80,17 @@ def compress_image(src: Path, dst: Path) -> subprocess.CompletedProcess:
     ext = src.suffix.lower()
 
     if ext == ".png":
-        if HAS_OXIPNG:
+        if HAS_PNGQUANT:
+            r = subprocess.run(
+                ["pngquant", f"--quality={P['pngq']}", "--strip",
+                 "--output", str(dst), "--force", "--", str(src)],
+                capture_output=True,
+            )
+            # returncode 98 = can't meet quality floor, dst not created → "already optimal"
+            if r.returncode == 98:
+                return subprocess.CompletedProcess(r.args, 0)
+            return r
+        elif HAS_OXIPNG:
             return subprocess.run(
                 ["oxipng", "--opt", str(P["png"]), "--strip", "all", "--out", str(dst), str(src)],
                 capture_output=True,
@@ -92,11 +104,18 @@ def compress_image(src: Path, dst: Path) -> subprocess.CompletedProcess:
             return None  # no PNG tool
 
     elif ext in (".jpg", ".jpeg"):
-        q = min(orig_jpeg_quality(str(src)), P["jpg"])
-        return subprocess.run(
-            ["magick", str(src), "-strip", "-quality", str(q), str(dst)],
-            capture_output=True,
-        )
+        if HAS_JPEGOPTIM:
+            with open(str(dst), "wb") as f:
+                return subprocess.run(
+                    ["jpegoptim", f"--max={P['jpg']}", "--strip-all", "--stdout", str(src)],
+                    stdout=f, stderr=subprocess.DEVNULL,
+                )
+        else:
+            q = min(orig_jpeg_quality(str(src)), P["jpg"])
+            return subprocess.run(
+                ["magick", str(src), "-strip", "-quality", str(q), str(dst)],
+                capture_output=True,
+            )
 
     elif ext == ".webp":
         return subprocess.run(
