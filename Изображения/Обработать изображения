@@ -13,12 +13,12 @@ for f in "${all_files[@]}"; do
 done
 
 if [ ${#files[@]} -eq 0 ]; then
-    notify-send "Изображения" "Не выбрано ни одного изображения." -i dialog-error
+    notify-send "Обработать изображения" "Не выбрано ни одного изображения." -i dialog-error
     exit 1
 fi
 
 OPTIONS=$("$PYTHON" "$SCRIPTS_ROOT/.meta/form.py" \
-    "Изображения" \
+    "Обработать изображения" \
     "${#files[@]} файл(ов)" \
     "Применить" \
     "Операция:Конвертировать|Изменить размер|Оптимизировать" \
@@ -27,7 +27,9 @@ OPTIONS=$("$PYTHON" "$SCRIPTS_ROOT/.meta/form.py" \
     "@1=WEBP|Режим WebP:lossless|90|80|70" \
     "@0=Изменить размер|Тип:По проценту|По размеру" \
     "@4=По проценту|Процент:scale:10:300:50" \
-    "@4=По размеру|Размер:1920x1080|1280x720|3840x2160|800x600|512x512|256x256") || exit 0
+    "@4=По размеру|Размер:1920x1080|1280x720|3840x2160|800x600|512x512|256x256" \
+    "@0=Оптимизировать|Метаданные:Убрать EXIF|Сохранить" \
+    "@0=Оптимизировать|Качество (JPG/WebP):Авто|95|85|75|60") || exit 0
 
 op=$(echo "$OPTIONS"     | cut -d'|' -f1)
 format=$(echo "$OPTIONS" | cut -d'|' -f2 | tr '[:upper:]' '[:lower:]')
@@ -36,6 +38,8 @@ webp_q=$(echo "$OPTIONS" | cut -d'|' -f4)
 r_type=$(echo "$OPTIONS" | cut -d'|' -f5)
 pct=$(echo "$OPTIONS"    | cut -d'|' -f6)
 size=$(echo "$OPTIONS"   | cut -d'|' -f7)
+meta=$(echo "$OPTIONS"   | cut -d'|' -f8)
+opt_q=$(echo "$OPTIONS"  | cut -d'|' -f9)
 
 PROGRESS_FILE=$(mktemp /tmp/img-XXXXX)
 export GI_TYPELIB_PATH="/usr/lib64/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
@@ -61,9 +65,10 @@ elif [[ "$op" == "Изменить размер" ]]; then
         >/tmp/img-worker.log 2>&1 &
 
 else
+    [[ "$opt_q" == "Авто" ]] && opt_q=""
     nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/magick_optimize_worker.py" \
-        "$PROGRESS_FILE" "${files[@]}" \
+        "$PROGRESS_FILE" "$meta" "$opt_q" "${files[@]}" \
         >/tmp/img-worker.log 2>&1 &
 fi
 
-exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Изображения"
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Обработать изображения"
