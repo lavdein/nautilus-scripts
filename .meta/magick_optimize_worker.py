@@ -3,7 +3,7 @@
 Worker: optimize images via ImageMagick.
 Usage: magick_optimize_worker.py progress_file strip quality file1 file2 ...
 strip:   "Убрать EXIF" | "Сохранить"
-quality: "" (auto) | number string like "85"
+quality: "" (auto per-format) | number string like "85"
 """
 import sys, subprocess
 from pathlib import Path
@@ -19,12 +19,39 @@ def write(pct, label, folder=""):
     Path(progress_file).write_text(f"{pct}|{label}{suffix}")
 
 
+def orig_jpeg_quality(src):
+    r = subprocess.run(
+        ["magick", "identify", "-format", "%Q", src],
+        capture_output=True, text=True,
+    )
+    try:
+        return int(r.stdout.strip())
+    except Exception:
+        return 85
+
+
 def build_args(src, dst):
+    ext = Path(src).suffix.lower()
     args = ["magick", src]
+
     if strip_meta == "Убрать EXIF":
         args += ["-strip"]
+
     if quality:
+        # Explicit quality chosen by user
         args += ["-quality", quality]
+    elif ext in (".jpg", ".jpeg"):
+        # Auto: read original quality, cap at 82 to guarantee reduction
+        q = min(orig_jpeg_quality(src), 82)
+        args += ["-quality", str(q)]
+    elif ext == ".png":
+        # Lossless: maximum zlib compression level
+        args += ["-define", "png:compression-level=9",
+                 "-define", "png:compression-filter=5"]
+    elif ext == ".webp":
+        args += ["-quality", "80"]
+    # Other formats: rely on -strip alone
+
     args.append(str(dst))
     return args
 
@@ -55,8 +82,16 @@ for i, src in enumerate(files):
     else:
         before = p.stat().st_size
         after  = dst.stat().st_size
-        saved  = max(0, (before - after) * 100 // before) if before > 0 else 0
-        write((i + 1) * 100 // total, f"✓ {p.name} (−{saved}%)", str(parent))
+        if after >= before:
+            # Recompression made it bigger — keep original, discard output
+            dst.unlink(missing_ok=True)
+            dst = parent / f"{stem}_opt{ext}"
+            import shutil
+            shutil.copy2(src, dst)
+            write((i + 1) * 100 // total, f"✓ {p.name} (уже оптимально)", str(parent))
+        else:
+            saved = (before - after) * 100 // before
+            write((i + 1) * 100 // total, f"✓ {p.name} (−{saved}%)", str(parent))
 
 if errors:
     body = "Не удалось оптимизировать:\n" + "\n".join(f"• {e}" for e in errors)
