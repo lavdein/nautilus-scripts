@@ -285,8 +285,8 @@ for i, src_str in enumerate(files):
     saved_bytes  = src.stat().st_size - dst.stat().st_size
     total_saved += saved_bytes
     saved_pct    = saved_bytes * 100 // src.stat().st_size
-    shutil.copystat(src, dst)
     if replace_mode:
+        shutil.copystat(src, dst)
         dst.replace(src)
     write((i+1)*100//total, f"✓ {src.name} (−{saved_pct}%)", str(src.parent))
     results["ok"] += 1
