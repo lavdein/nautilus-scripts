@@ -11,7 +11,7 @@ for f in "${all_files[@]}"; do
 done
 
 if [ -z "$input" ]; then
-    notify-send "Информация о файле" "Файл не выбран." -i dialog-error
+    notify-send "Информация о файле" "Файл не выбран."
     exit 1
 fi
 

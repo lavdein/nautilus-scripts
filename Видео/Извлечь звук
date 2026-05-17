@@ -7,7 +7,7 @@ PYTHON="/usr/bin/python3"
 mapfile -t files <<< "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"
 
 if [ ${#files[@]} -eq 0 ] || [ -z "${files[0]}" ]; then
-    notify-send "Извлечь звук" "Файлы не выбраны." -i dialog-error
+    notify-send "Извлечь звук" "Файлы не выбраны."
     exit 1
 fi
 

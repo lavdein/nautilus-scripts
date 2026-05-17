@@ -9,7 +9,7 @@ files=()
 for f in "${all_files[@]}"; do [ -n "$f" ] && files+=("$f"); done
 
 if [ ${#files[@]} -eq 0 ]; then
-    notify-send "Архив" "Файлы не выбраны." -i dialog-error
+    notify-send "Архив" "Файлы не выбраны."
     exit 1
 fi
 
@@ -62,7 +62,7 @@ else
         [[ "$name_lower" =~ \.(zip|tar\.gz|tgz|tar\.xz|tar\.bz2|tar)$ ]] && archives+=("$f")
     done
     if [ ${#archives[@]} -eq 0 ]; then
-        notify-send "Архив" "Не найдено архивов среди выбранных файлов." -i dialog-error
+        notify-send "Архив" "Не найдено архивов среди выбранных файлов."
         exit 1
     fi
     nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/archive_extract_worker.py" \

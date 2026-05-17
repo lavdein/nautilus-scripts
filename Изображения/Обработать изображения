@@ -13,7 +13,7 @@ for f in "${all_files[@]}"; do
 done
 
 if [ ${#files[@]} -eq 0 ]; then
-    notify-send "Обработать изображения" "Не выбрано ни одного изображения." -i dialog-error
+    notify-send "Обработать изображения" "Не выбрано ни одного изображения."
     exit 1
 fi
 

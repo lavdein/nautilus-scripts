@@ -13,7 +13,7 @@ for f in "${all_files[@]}"; do
 done
 
 if [ ${#files[@]} -eq 0 ]; then
-    notify-send "Конвертировать видео" "Не выбрано ни одного видео-файла." -i dialog-error
+    notify-send "Конвертировать видео" "Не выбрано ни одного видео-файла."
     exit 1
 fi
 
@@ -39,7 +39,7 @@ if [[ "$mode" == "Перепаковать без потерь" ]]; then
         [ "$ext" != "$format" ] && valid_files+=("$f")
     done
     if [ ${#valid_files[@]} -eq 0 ]; then
-        notify-send "Конвертировать видео" "Все файлы уже в формате ${format^^}." -i dialog-information
+        notify-send "Конвертировать видео" "Все файлы уже в формате ${format^^}."
         exit 0
     fi
     nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/ffmpeg_remux_worker.py" \

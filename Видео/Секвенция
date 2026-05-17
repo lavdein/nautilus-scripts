@@ -9,7 +9,7 @@ files=()
 for f in "${all_files[@]}"; do [ -n "$f" ] && files+=("$f"); done
 
 if [ ${#files[@]} -eq 0 ]; then
-    notify-send "Секвенция" "Файлы не выбраны." -i dialog-error
+    notify-send "Секвенция" "Файлы не выбраны."
     exit 1
 fi
 
@@ -39,7 +39,7 @@ if [[ "$dir" == "Видео → кадры" ]]; then
         [[ "$ext" =~ ^(mp4|mkv|avi|mov|webm|flv|ts|m2ts|wmv)$ ]] && video_files+=("$f")
     done
     if [ ${#video_files[@]} -eq 0 ]; then
-        notify-send "Секвенция" "Не найдено видео-файлов среди выбранных." -i dialog-error
+        notify-send "Секвенция" "Не найдено видео-файлов среди выбранных."
         exit 1
     fi
     case "$freq" in
@@ -59,7 +59,7 @@ else
         [[ "$ext" =~ ^(png|jpg|jpeg|webp|tiff|tif|bmp)$ ]] && img_files+=("$f")
     done
     if [ ${#img_files[@]} -lt 2 ]; then
-        notify-send "Секвенция" "Выберите минимум 2 изображения." -i dialog-error
+        notify-send "Секвенция" "Выберите минимум 2 изображения."
         exit 1
     fi
     fps_val="${vfps%% *}"

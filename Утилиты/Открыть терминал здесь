@@ -5,7 +5,7 @@ dir="${NAUTILUS_SCRIPT_CURRENT_URI#file://}"
 dir=$(/usr/bin/python3 -c "import urllib.parse, sys; print(urllib.parse.unquote(sys.argv[1]))" "$dir")
 
 if ! command -v ptyxis &>/dev/null; then
-    notify-send "Открыть терминал" "Ptyxis не найден." -i dialog-error
+    notify-send "Открыть терминал" "Ptyxis не найден."
     exit 1
 fi
 

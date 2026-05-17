@@ -13,7 +13,7 @@ done
 paths="${paths%$'\n'}"
 
 if [ $count -eq 0 ]; then
-    notify-send "Копировать путь" "Файлы не выбраны." -i dialog-error
+    notify-send "Копировать путь" "Файлы не выбраны."
     exit 1
 fi
 
@@ -24,12 +24,12 @@ elif command -v xclip &>/dev/null; then
 elif command -v xsel &>/dev/null; then
     printf '%s' "$paths" | xsel --clipboard --input
 else
-    notify-send "Копировать путь" "Не найден wl-copy / xclip / xsel." -i dialog-error
+    notify-send "Копировать путь" "Не найден wl-copy / xclip / xsel."
     exit 1
 fi
 
 if [ $count -eq 1 ]; then
-    notify-send "Путь скопирован" "$paths" -i edit-copy
+    notify-send "Путь скопирован" "$paths"
 else
-    notify-send "Пути скопированы" "$count файла(ов)" -i edit-copy
+    notify-send "Пути скопированы" "$count файла(ов)"
 fi

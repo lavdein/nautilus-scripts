@@ -9,7 +9,7 @@ files=()
 for f in "${all_files[@]}"; do [ -n "$f" ] && files+=("$f"); done
 
 if [ ${#files[@]} -eq 0 ]; then
-    notify-send "Base64" "Файлы не выбраны." -i dialog-error
+    notify-send "Base64" "Файлы не выбраны."
     exit 1
 fi
 
