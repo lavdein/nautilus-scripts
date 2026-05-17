@@ -18,21 +18,15 @@ if [ ${#img_files[@]} -lt 2 ]; then
     exit 1
 fi
 
-fps=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
-    "Частота кадров" \
-    "Сколько кадров в секунду в итоговом видео" \
-    "12 fps|Анимации, медленное движение" \
-    "24 fps|Кино-стандарт" \
-    "25 fps|PAL / европейский стандарт" \
-    "30 fps|Видео, веб" \
-    "60 fps|Плавное движение, геймплей") || exit 0
+OPTIONS=$("$PYTHON" "$SCRIPTS_ROOT/.meta/form.py" \
+    "Секвенция в видео" \
+    "${#img_files[@]} изображений" \
+    "Собрать" \
+    "Частота кадров:12 fps|24 fps|25 fps|30 fps|60 fps" \
+    "Формат:MP4|MKV") || exit 0
 
-fmt=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
-    "Формат видео" \
-    "Контейнер и качество итогового файла" \
-    "MP4|H.264, широкая совместимость" \
-    "MKV|H.264, чуть лучше качество") || exit 0
-
+fps=$(echo "$OPTIONS" | cut -d'|' -f1)
+fmt=$(echo "$OPTIONS" | cut -d'|' -f2)
 fps_val="${fps%% *}"
 fmt="${fmt,,}"
 
@@ -43,4 +37,4 @@ nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/ffmpeg_sequence_worker.py" \
     "$PROGRESS_FILE" "$fps_val" "$fmt" "${img_files[@]}" \
     >/tmp/seq2vid-worker.log 2>&1 &
 
-exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE"
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Секвенция в видео"

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+SCRIPTS_ROOT="$(dirname "$(dirname "$(realpath "$0")")")"
+PYTHON="/usr/bin/python3"
+
+mapfile -t all_files <<< "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"
+files=()
+for f in "${all_files[@]}"; do [ -n "$f" ] && files+=("$f"); done
+
+if [ ${#files[@]} -eq 0 ]; then
+    notify-send "Base64" "Файлы не выбраны." -i dialog-error
+    exit 1
+fi
+
+mode=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
+    "Base64" \
+    "${#files[@]} файл(ов)" \
+    "Кодировать в Base64|Бинарный файл → текст (.b64)" \
+    "Декодировать из Base64|Файл .b64 → исходный файл") || exit 0
+
+"$PYTHON" "$SCRIPTS_ROOT/.meta/base64_worker.py" "$mode" "${files[@]}"

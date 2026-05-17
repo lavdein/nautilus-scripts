@@ -33,4 +33,4 @@ nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/ffmpeg_compress_worker.py" \
     "$PROGRESS_FILE" "$crf" "$speed" "${files[@]}" \
     >/tmp/compress-vid-worker.log 2>&1 &
 
-exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE"
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Сжать видео"

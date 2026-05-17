@@ -18,23 +18,17 @@ if [ ${#video_files[@]} -eq 0 ]; then
     exit 1
 fi
 
-fps=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
-    "Частота извлечения" \
-    "Сколько кадров брать из каждой секунды видео" \
-    "1 кадр/с|По одному кадру на секунду" \
-    "2 кадра/с|Каждые полсекунды" \
-    "5 кадров/с|5 кадров на секунду" \
-    "10 кадров/с|10 кадров на секунду" \
-    "Каждый кадр|Все кадры — осторожно, файлов будет очень много") || exit 0
+OPTIONS=$("$PYTHON" "$SCRIPTS_ROOT/.meta/form.py" \
+    "Видео в секвенцию" \
+    "${#video_files[@]} файл(ов)" \
+    "Извлечь" \
+    "Частота:1 кадр/с|2 кадра/с|5 кадров/с|10 кадров/с|Каждый кадр" \
+    "Формат:PNG|JPG|WEBP") || exit 0
 
-fmt=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
-    "Формат кадров" \
-    "Формат файлов изображений на выходе" \
-    "PNG|Без потерь, большой размер" \
-    "JPG|Компактный, небольшая потеря качества" \
-    "WEBP|Современный, компактный и качественный") || exit 0
-
+fps=$(echo "$OPTIONS" | cut -d'|' -f1)
+fmt=$(echo "$OPTIONS" | cut -d'|' -f2)
 fmt="${fmt,,}"
+
 case "$fps" in
     "1 кадр/с")    fps_val="1"  ;;
     "2 кадра/с")   fps_val="2"  ;;
@@ -50,4 +44,4 @@ nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/ffmpeg_extract_worker.py" \
     "$PROGRESS_FILE" "$fps_val" "$fmt" "${video_files[@]}" \
     >/tmp/vid2seq-worker.log 2>&1 &
 
-exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE"
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Видео в секвенцию"

@@ -11,7 +11,7 @@ from pathlib import Path
 progress_file = sys.argv[1]
 resize_arg    = sys.argv[2]
 suffix        = sys.argv[3]
-files         = sys.argv[4:]
+files         = [f for f in sys.argv[4:] if f]
 
 
 def write(pct, label, folder=""):

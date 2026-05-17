@@ -10,7 +10,7 @@ from pathlib import Path
 progress_file = sys.argv[1]
 fps           = sys.argv[2]
 fmt           = sys.argv[3]
-files         = sorted(sys.argv[4:])
+files         = sorted(f for f in sys.argv[4:] if f)
 
 total_frames = len(files)
 parent = Path(files[0]).parent

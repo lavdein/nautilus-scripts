@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+SCRIPTS_ROOT="$(dirname "$(dirname "$(realpath "$0")")")"
+PYTHON="/usr/bin/python3"
+
+IFS=$'\n' read -ra all_files <<< "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"
+input=""
+for f in "${all_files[@]}"; do
+    [ -n "$f" ] && { input="$f"; break; }
+done
+
+if [ -z "$input" ]; then
+    notify-send "Информация о файле" "Файл не выбран." -i dialog-error
+    exit 1
+fi
+
+export GI_TYPELIB_PATH="/usr/lib64/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
+
+"$PYTHON" "$SCRIPTS_ROOT/.meta/file_info_worker.py" "$input" \
+| "$PYTHON" "$SCRIPTS_ROOT/.meta/info_dialog.py"

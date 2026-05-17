@@ -11,39 +11,22 @@ if [ ${#files[@]} -eq 0 ] || [ -z "${files[0]}" ]; then
     exit 1
 fi
 
-format=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
+OPTIONS=$("$PYTHON" "$SCRIPTS_ROOT/.meta/form.py" \
     "Конвертировать в формат" \
-    "Выберите формат вывода" \
-    "PNG|Без потерь, поддержка прозрачности" \
-    "JPG|Фото, малый размер" \
-    "WEBP|Веб — малый размер и прозрачность" \
-    "AVIF|Новый формат, лучшее сжатие" \
-    "GIF|Анимация / совместимость" \
-    "TIFF|Полиграфия / архив" \
-    "ICO|Иконка Windows") || exit 0
+    "${#files[@]} файл(ов)" \
+    "Конвертировать" \
+    "Формат:PNG|JPG|WEBP|AVIF|GIF|TIFF|ICO" \
+    "@0=JPG|Качество:scale:1:100:85" \
+    "@0=WEBP|Режим:lossless|90|80|70") || exit 0
+
+format=$(echo "$OPTIONS"  | cut -d'|' -f1)
+jpg_q=$(echo "$OPTIONS"   | cut -d'|' -f2)
+webp_q=$(echo "$OPTIONS"  | cut -d'|' -f3)
 
 format="${format,,}"
 quality=""
-
-if [ "$format" = "jpg" ]; then
-    quality=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
-        "Качество JPEG" \
-        "Баланс между качеством и размером файла" \
-        "95|Высокое — почти без потерь" \
-        "85|Хорошее — рекомендуется" \
-        "75|Среднее — меньше файл" \
-        "60|Низкое — маленький файл") || exit 0
-fi
-
-if [ "$format" = "webp" ]; then
-    quality=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
-        "Качество WebP" \
-        "Режим сжатия" \
-        "lossless|Без потерь — больше файл" \
-        "90|Высокое качество" \
-        "80|Хорошее качество" \
-        "70|Среднее качество") || exit 0
-fi
+[[ "$format" == "jpg" ]]  && quality="$jpg_q"
+[[ "$format" == "webp" ]] && quality="$webp_q"
 
 PROGRESS_FILE=$(mktemp /tmp/img-convert-XXXXX)
 export GI_TYPELIB_PATH="/usr/lib64/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
@@ -52,4 +35,4 @@ nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/magick_convert_worker.py" \
     "$PROGRESS_FILE" "$format" "$quality" "${files[@]}" \
     >/tmp/img-convert-worker.log 2>&1 &
 
-exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE"
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Конвертировать в формат"

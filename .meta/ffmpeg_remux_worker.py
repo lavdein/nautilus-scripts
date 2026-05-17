@@ -8,7 +8,7 @@ from pathlib import Path
 
 progress_file = sys.argv[1]
 fmt           = sys.argv[2]
-files         = sys.argv[3:]
+files         = [f for f in sys.argv[3:] if f]
 
 # Codecs that need to be transcoded for each container
 # (MKV supports everything, so it's not here)

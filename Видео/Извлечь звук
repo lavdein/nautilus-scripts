@@ -29,4 +29,4 @@ nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/ffmpeg_audio_worker.py" \
     "$PROGRESS_FILE" "$format" "${files[@]}" \
     >/tmp/extract-audio-worker.log 2>&1 &
 
-exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE"
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Извлечь звук"

@@ -29,7 +29,6 @@ class PickApp(Adw.Application):
         win = Adw.ApplicationWindow(
             application=self,
             default_width=440,
-            default_height=380,
             resizable=False,
         )
         win.set_title(title)
@@ -38,6 +37,8 @@ class PickApp(Adw.Application):
         win.set_content(toolbar_view)
 
         header = Adw.HeaderBar()
+        header.set_show_end_title_buttons(False)
+        header.set_show_start_title_buttons(False)
         cancel_btn = Gtk.Button(label="Отмена")
         cancel_btn.connect("clicked", lambda *_: self.quit())
         header.pack_start(cancel_btn)
@@ -47,6 +48,7 @@ class PickApp(Adw.Application):
             hscrollbar_policy=Gtk.PolicyType.NEVER,
             vscrollbar_policy=Gtk.PolicyType.AUTOMATIC,
         )
+        scroll.set_propagate_natural_height(True)
         toolbar_view.set_content(scroll)
 
         clamp = Adw.Clamp(maximum_size=460, tightening_threshold=420)
@@ -76,11 +78,16 @@ class PickApp(Adw.Application):
             desc_lbl.set_wrap(True)
             header_box.append(desc_lbl)
 
-        # Option rows
         group = Adw.PreferencesGroup()
         box.append(group)
 
         for opt in options:
+            if opt.startswith("---"):
+                group = Adw.PreferencesGroup()
+                group.set_title(opt[3:])
+                box.append(group)
+                continue
+
             parts = opt.split("|", 1)
             label_text = parts[0]
             subtitle_text = parts[1] if len(parts) > 1 else ""

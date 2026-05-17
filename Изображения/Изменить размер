@@ -11,55 +11,25 @@ if [ ${#files[@]} -eq 0 ] || [ -z "${files[0]}" ]; then
     exit 1
 fi
 
-mode=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
+OPTIONS=$("$PYTHON" "$SCRIPTS_ROOT/.meta/form.py" \
     "Изменить размер" \
-    "Способ масштабирования" \
-    "Процент|Уменьшить или увеличить на N% от оригинала" \
-    "По ширине|Задать ширину, высота пропорционально" \
-    "По высоте|Задать высоту, ширина пропорционально" \
-    "Пресет|Выбрать из готовых размеров") || exit 0
+    "${#files[@]} файл(ов)" \
+    "Изменить" \
+    "Тип:По проценту|По размеру" \
+    "@0=По проценту|Процент:scale:10:300:50" \
+    "@0=По размеру|Размер:1920x1080|1280x720|3840x2160|800x600|512x512|256x256") || exit 0
 
-resize_arg=""
-suffix=""
+type=$(echo "$OPTIONS" | cut -d'|' -f1)
+pct=$(echo "$OPTIONS"  | cut -d'|' -f2)
+size=$(echo "$OPTIONS" | cut -d'|' -f3)
 
-case "$mode" in
-    "Процент")
-        val=$(zenity --entry --title="Изменить размер" \
-            --text="Процент (50 — вдвое меньше, 200 — вдвое больше):" \
-            --entry-text="50" --width=360 2>/dev/null) || exit 0
-        resize_arg="${val}%"
-        suffix="_${val}pct"
-        ;;
-    "По ширине")
-        val=$(zenity --entry --title="Изменить размер" \
-            --text="Ширина в пикселях:" \
-            --entry-text="1920" --width=360 2>/dev/null) || exit 0
-        resize_arg="${val}x"
-        suffix="_w${val}"
-        ;;
-    "По высоте")
-        val=$(zenity --entry --title="Изменить размер" \
-            --text="Высота в пикселях:" \
-            --entry-text="1080" --width=360 2>/dev/null) || exit 0
-        resize_arg="x${val}"
-        suffix="_h${val}"
-        ;;
-    "Пресет")
-        val=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
-            "Пресеты размеров" \
-            "Выберите стандартный размер" \
-            "1920x1080|Full HD" \
-            "1280x720|HD 720p" \
-            "3840x2160|4K UHD" \
-            "800x600|Веб / превью" \
-            "512x512|Квадрат 512px" \
-            "256x256|Иконка 256px") || exit 0
-        resize_arg="$val"
-        suffix="_${val/x/_}"
-        ;;
-esac
-
-[ -z "$resize_arg" ] && exit 0
+if [[ "$type" == "По проценту" ]]; then
+    resize_arg="${pct}%"
+    suffix="_${pct}pct"
+else
+    resize_arg="$size"
+    suffix="_${size/x/_}"
+fi
 
 PROGRESS_FILE=$(mktemp /tmp/img-resize-XXXXX)
 export GI_TYPELIB_PATH="/usr/lib64/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
@@ -68,4 +38,4 @@ nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/magick_resize_worker.py" \
     "$PROGRESS_FILE" "$resize_arg" "$suffix" "${files[@]}" \
     >/tmp/img-resize-worker.log 2>&1 &
 
-exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE"
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Изменить размер"

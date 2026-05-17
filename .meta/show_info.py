@@ -18,7 +18,6 @@ class InfoApp(Adw.Application):
         win = Adw.ApplicationWindow(
             application=self,
             default_width=420,
-            default_height=460,
             resizable=True,
         )
         win.set_title(title)

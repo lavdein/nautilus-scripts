@@ -50,4 +50,4 @@ nohup "$PYTHON_WORK" "$WORKER" \
     "$PROGRESS_FILE" "$MODEL" "$LANG" "$DO_TXT" "$DO_SRT" "${FILES[@]}" \
     >/tmp/whisper-worker.log 2>&1 &
 
-exec "$PYTHON_VENV" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE"
+exec "$PYTHON_VENV" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Транскрипция Whisper"

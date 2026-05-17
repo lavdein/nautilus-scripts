@@ -10,7 +10,7 @@ from pathlib import Path
 progress_file = sys.argv[1]
 archive_path  = sys.argv[2]
 fmt           = sys.argv[3]
-names         = sys.argv[4:]
+names         = [f for f in sys.argv[4:] if f]
 parent        = Path(archive_path).parent
 
 

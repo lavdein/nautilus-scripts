@@ -9,7 +9,7 @@ from pathlib import Path
 
 progress_file = sys.argv[1]
 fmt           = sys.argv[2]
-files         = sys.argv[3:]
+files         = [f for f in sys.argv[3:] if f]
 
 CODEC_ARGS = {
     "mp3":  ["-c:a", "libmp3lame", "-q:a", "2"],

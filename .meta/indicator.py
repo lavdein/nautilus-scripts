@@ -14,6 +14,7 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import AppIndicator3, Gtk, GLib
 
 progress_file = sys.argv[1]
+notify_title  = sys.argv[2] if len(sys.argv) > 2 else "Готово"
 
 SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 tick = [0]
@@ -66,6 +67,7 @@ def poll():
             n = len(paths)
             item_open.set_label("Открыть папку" if n == 1 else f"Открыть папки ({n})")
             item_open.set_sensitive(True)
+        subprocess.run(["notify-send", notify_title, msg, "-i", "emblem-default"])
         indicator.set_icon("emblem-default")
         indicator.set_label(" ✓", " ✓")
         item_info.set_label(msg)

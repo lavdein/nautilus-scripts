@@ -49,4 +49,4 @@ nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/archive_worker.py" \
     "$PROGRESS_FILE" "$output" "$format" "${names[@]}" \
     >/tmp/archive-worker.log 2>&1 &
 
-exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE"
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Создать архив"
