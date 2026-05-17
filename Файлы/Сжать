@@ -13,18 +13,21 @@ if [ ${#files[@]} -eq 0 ]; then
     exit 1
 fi
 
-preset=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
+OPTIONS=$("$PYTHON" "$SCRIPTS_ROOT/.meta/form.py" \
     "Сжать" \
     "${#files[@]} файл(ов)" \
-    "Осторожно|Минимальные потери качества" \
-    "Баланс|Хорошее сжатие, приемлемое качество" \
-    "Агрессивно|Максимальное сжатие") || exit 0
+    "Сжать" \
+    "Пресет:Осторожно|Баланс|Агрессивно" \
+    "Результат:Создать копию|Заменить оригинал") || exit 0
+
+preset=$(echo "$OPTIONS"  | cut -d'|' -f1)
+replace=$(echo "$OPTIONS" | cut -d'|' -f2)
 
 PROGRESS_FILE=$(mktemp /tmp/compress-XXXXX)
 export GI_TYPELIB_PATH="/usr/lib64/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
 
 nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/compress_all_worker.py" \
-    "$PROGRESS_FILE" "$preset" "${files[@]}" \
+    "$PROGRESS_FILE" "$preset" "$replace" "${files[@]}" \
     >/tmp/compress-worker.log 2>&1 &
 
 exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Сжать"

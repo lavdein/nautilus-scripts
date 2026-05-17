@@ -10,7 +10,8 @@ from pathlib import Path
 
 progress_file = sys.argv[1]
 preset        = sys.argv[2]
-files         = [f for f in sys.argv[3:] if f]
+replace_mode  = sys.argv[3] == "Заменить оригинал"
+files         = [f for f in sys.argv[4:] if f]
 
 # ── Preset settings ───────────────────────────────────────────────────────────
 P = {
@@ -24,9 +25,10 @@ HAS_OXIPNG    = shutil.which("oxipng")
 HAS_OPTIPNG   = shutil.which("optipng")
 HAS_JPEGOPTIM = shutil.which("jpegoptim")
 HAS_GIFSICLE  = shutil.which("gifsicle")
+HAS_SCOUR     = shutil.which("scour")
 HAS_GS        = shutil.which("gs")
 
-IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
 VIDEO_EXT = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v"}
 AUDIO_EXT = {".mp3", ".aac", ".m4a", ".ogg", ".opus", ".wma"}
 LOSSLESS_AUDIO = {".flac", ".wav", ".aiff"}
@@ -36,6 +38,12 @@ PDF_EXT   = {".pdf"}
 def write(pct, label, folder=""):
     sfx = f"|{folder}" if folder else ""
     Path(progress_file).write_text(f"{pct}|{label}{sfx}")
+
+
+def fmt_size(b):
+    if b >= 1_048_576: return f"{b / 1_048_576:.1f} MB"
+    if b >= 1024:      return f"{b / 1024:.0f} KB"
+    return f"{b} B"
 
 
 def unique_dst(p: Path, suffix="_c") -> Path:
@@ -132,6 +140,17 @@ def compress_image(src: Path, dst: Path) -> subprocess.CompletedProcess:
         else:
             return None  # no GIF tool
 
+    elif ext == ".svg":
+        if HAS_SCOUR:
+            return subprocess.run(
+                ["scour", "--enable-viewboxing", "--enable-id-stripping",
+                 "--enable-comment-stripping", "--shorten-ids", "--remove-metadata",
+                 "-i", str(src), "-o", str(dst)],
+                capture_output=True,
+            )
+        else:
+            return None  # no SVG tool
+
 
 class _Result:
     def __init__(self, code): self.returncode = code
@@ -202,8 +221,9 @@ def compress_pdf(src: Path, dst: Path) -> subprocess.CompletedProcess | None:
 
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
-total   = len(files)
-results = {"ok": 0, "skip": 0, "err": 0}
+total       = len(files)
+results     = {"ok": 0, "skip": 0, "err": 0}
+total_saved = 0
 write(0, "Подготовка...")
 
 for i, src_str in enumerate(files):
@@ -253,13 +273,19 @@ for i, src_str in enumerate(files):
         results["skip"] += 1
         continue
 
-    saved = (src.stat().st_size - dst.stat().st_size) * 100 // src.stat().st_size
-    write((i+1)*100//total, f"✓ {src.name} (−{saved}%)", str(src.parent))
+    saved_bytes  = src.stat().st_size - dst.stat().st_size
+    total_saved += saved_bytes
+    saved_pct    = saved_bytes * 100 // src.stat().st_size
+    shutil.copystat(src, dst)
+    if replace_mode:
+        dst.replace(src)
+    write((i+1)*100//total, f"✓ {src.name} (−{saved_pct}%)", str(src.parent))
     results["ok"] += 1
 
 # ── Finish ────────────────────────────────────────────────────────────────────
+saved_str = f" (−{fmt_size(total_saved)})" if total_saved > 0 else ""
 parts = []
-if results["ok"]:   parts.append(f"Сжато: {results['ok']}")
+if results["ok"]:   parts.append(f"Сжато: {results['ok']}{saved_str}")
 if results["skip"]: parts.append(f"Пропущено: {results['skip']}")
 msg = ", ".join(parts) or "Нечего сжимать"
 
