@@ -5,7 +5,7 @@ Usage: compress_all_worker.py progress_file preset file1 file2 ...
 preset: "Осторожно" | "Баланс" | "Агрессивно"
 Output: <stem>_c.<ext> next to original (skipped if result is not smaller).
 """
-import sys, json, subprocess, shutil, tempfile, os
+import sys, json, subprocess, shutil, tempfile, os, time
 from pathlib import Path
 
 progress_file = sys.argv[1]
@@ -45,14 +45,22 @@ def unique_dst(p: Path, suffix="_c") -> Path:
     return dst
 
 
-def probe_bitrate(src) -> int:
-    """Return file bitrate in kbps, 0 on failure."""
+def probe_format(src) -> dict:
     try:
         r = subprocess.run(
             ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", src],
             capture_output=True,
         )
-        return int(json.loads(r.stdout).get("format", {}).get("bit_rate", 0)) // 1000
+        return json.loads(r.stdout).get("format", {})
+    except Exception:
+        return {}
+
+def probe_bitrate(src) -> int:
+    return int(probe_format(src).get("bit_rate", 0)) // 1000
+
+def probe_duration_us(src) -> int:
+    try:
+        return int(float(probe_format(src).get("duration", 0)) * 1_000_000)
     except Exception:
         return 0
 
@@ -106,25 +114,41 @@ def compress_image(src: Path, dst: Path) -> subprocess.CompletedProcess:
             return None  # no GIF tool
 
 
-def compress_video(src: Path, dst: Path) -> subprocess.CompletedProcess:
-    with tempfile.NamedTemporaryFile(suffix=".log", delete=False) as tmp:
-        stderr_path = tmp.name
-    try:
-        result = subprocess.run(
-            ["ffmpeg", "-y", "-i", str(src),
-             "-c:v", "libx264", "-crf", str(P["crf"]), "-preset", P["speed"],
-             "-c:a", "aac", "-b:a", "128k",
-             "-movflags", "+faststart",
-             str(dst)],
-            stderr=open(stderr_path, "w"),
-            stdout=subprocess.DEVNULL,
-        )
-    finally:
-        os.unlink(stderr_path)
-    return result
+class _Result:
+    def __init__(self, code): self.returncode = code
+
+def compress_video(src: Path, dst: Path, i: int, total: int) -> _Result:
+    dur_us   = probe_duration_us(str(src))
+    prog_tmp = tempfile.mktemp(prefix="ffcomp_prog_")
+    err_tmp  = tempfile.mktemp(prefix="ffcomp_err_")
+    proc = subprocess.Popen(
+        ["ffmpeg", "-y", "-i", str(src),
+         "-c:v", "libx264", "-crf", str(P["crf"]), "-preset", P["speed"],
+         "-c:a", "aac", "-b:a", "128k",
+         "-movflags", "+faststart",
+         "-progress", prog_tmp, str(dst)],
+        stderr=open(err_tmp, "w"), stdout=subprocess.DEVNULL,
+    )
+    while proc.poll() is None:
+        time.sleep(0.25)
+        try:
+            for line in reversed(Path(prog_tmp).read_text().splitlines()):
+                if line.startswith("out_time_us="):
+                    us = int(line.split("=")[1])
+                    if dur_us > 0:
+                        file_pct = min(99, us * 100 // dur_us)
+                        write((i * 100 + file_pct) // total,
+                              f"({i+1}/{total}) {src.name}", str(src.parent))
+                    break
+        except Exception:
+            pass
+    for tmp in (prog_tmp, err_tmp):
+        try: os.unlink(tmp)
+        except FileNotFoundError: pass
+    return _Result(proc.returncode)
 
 
-def compress_audio(src: Path, dst: Path) -> subprocess.CompletedProcess | None:
+def compress_audio(src: Path, dst: Path) -> _Result | None:
     current_kbps = probe_bitrate(str(src))
     if current_kbps and current_kbps <= P["audio"]:
         return None  # already at or below target — skip
@@ -135,18 +159,16 @@ def compress_audio(src: Path, dst: Path) -> subprocess.CompletedProcess | None:
                  ".opus": ("libopus", []), ".wma": ("wmav2", [])}
     codec, extra = codec_map.get(ext, ("libopus", []))
 
-    with tempfile.NamedTemporaryFile(suffix=".log", delete=False) as tmp:
-        stderr_path = tmp.name
-    try:
-        result = subprocess.run(
-            ["ffmpeg", "-y", "-i", str(src),
-             "-c:a", codec, "-b:a", f"{P['audio']}k"] + extra + [str(dst)],
-            stderr=open(stderr_path, "w"),
-            stdout=subprocess.DEVNULL,
-        )
-    finally:
-        os.unlink(stderr_path)
-    return result
+    err_tmp = tempfile.mktemp(prefix="ffaud_err_")
+    proc = subprocess.Popen(
+        ["ffmpeg", "-y", "-i", str(src),
+         "-c:a", codec, "-b:a", f"{P['audio']}k"] + extra + [str(dst)],
+        stderr=open(err_tmp, "w"), stdout=subprocess.DEVNULL,
+    )
+    proc.wait()
+    try: os.unlink(err_tmp)
+    except FileNotFoundError: pass
+    return _Result(proc.returncode)
 
 
 def compress_pdf(src: Path, dst: Path) -> subprocess.CompletedProcess | None:
@@ -182,7 +204,7 @@ for i, src_str in enumerate(files):
     if ext in IMAGE_EXT:
         result = compress_image(src, dst)
     elif ext in VIDEO_EXT:
-        result = compress_video(src, dst)
+        result = compress_video(src, dst, i, total)
     elif ext in AUDIO_EXT:
         result = compress_audio(src, dst)
         if result is None:
