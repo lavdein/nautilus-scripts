@@ -78,11 +78,9 @@ write(0, "Подготовка...")
 
 png_files = [f for f in files if Path(f).suffix.lower() == ".png"]
 if png_files and PNG_TOOL is None:
-    subprocess.run([
-        "notify-send", "Обработать изображения",
-        "Для сжатия PNG установите oxipng или optipng:\nsudo dnf install oxipng",
-        "-i", "dialog-warning",
-    ])
+    subprocess.run(["notify-send", "--app-name", "Обработать изображения",
+                    "Обработать изображения",
+                    "Для сжатия PNG установите oxipng или optipng:\nsudo dnf install oxipng"])
 
 for i, src in enumerate(files):
     p      = Path(src)
@@ -131,7 +129,7 @@ for i, src in enumerate(files):
 
 if errors:
     body = "Не удалось оптимизировать:\n" + "\n".join(f"• {e}" for e in errors)
-    subprocess.run(["notify-send", "Обработать изображения", body, "-i", "dialog-warning"])
+    subprocess.run(["notify-send", "--app-name", "Обработать изображения", "Обработать изображения", body])
     write(100, f"Ошибок: {len(errors)}")
 else:
     all_dirs = list(dict.fromkeys(str(Path(f).parent) for f in files))

@@ -33,8 +33,7 @@ elif fmt == "tar.xz":
 result = subprocess.run(cmd, capture_output=True)
 
 if result.returncode != 0:
-    subprocess.run(["notify-send", "Создать архив",
-                    "Не удалось создать архив.", "-i", "dialog-warning"])
+    subprocess.run(["notify-send", "--app-name", "Архив", "Архив", "Не удалось создать архив."])
     write(100, "Ошибка")
 else:
     size = subprocess.run(["du", "-sh", archive_path],

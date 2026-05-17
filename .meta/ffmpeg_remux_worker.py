@@ -122,7 +122,7 @@ for i, src in enumerate(files):
 # Notification + done signal
 if errors:
     body = "Не удалось перепаковать:\n" + "\n".join(f"• {e}" for e in errors)
-    subprocess.run(["notify-send", "Сменить контейнер", body, "-i", "dialog-warning"])
+    subprocess.run(["notify-send", "--app-name", "Конвертировать видео", "Конвертировать видео", body])
     write(100, f"Ошибок: {len(errors)}")
 else:
     note      = f" (аудио → {'AAC' if fmt != 'avi' else 'MP3'})" if transcoded_files else ""

@@ -67,7 +67,7 @@ def poll():
             n = len(paths)
             item_open.set_label("Открыть папку" if n == 1 else f"Открыть папки ({n})")
             item_open.set_sensitive(True)
-        subprocess.run(["notify-send", notify_title, msg, "-i", "emblem-default"])
+        subprocess.run(["notify-send", "--app-name", notify_title, notify_title, msg])
         indicator.set_icon("emblem-default")
         indicator.set_label(" ✓", " ✓")
         item_info.set_label(msg)

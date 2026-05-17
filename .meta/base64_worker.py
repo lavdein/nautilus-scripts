@@ -43,6 +43,6 @@ msg  = f"{verb}: {len(done)} файл(ов)"
 
 if errors:
     err_body = msg + "\nОшибки:\n" + "\n".join(f"• {e}" for e in errors)
-    subprocess.run(["notify-send", "Base64", err_body, "-i", "dialog-warning"])
+    subprocess.run(["notify-send", "--app-name", "Base64", "Base64", err_body])
 else:
-    subprocess.run(["notify-send", "Base64", msg, "-i", "emblem-default"])
+    subprocess.run(["notify-send", "--app-name", "Base64", "Base64", msg])

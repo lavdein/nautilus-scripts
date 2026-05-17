@@ -328,7 +328,7 @@ if results["skip"]: parts.append(f"Пропущено: {results['skip']}")
 msg = ", ".join(parts) or "Нечего сжимать"
 
 if results["err"]:
-    subprocess.run(["notify-send", "Сжать", f"{msg}\nОшибок: {results['err']}", "-i", "dialog-warning"])
+    subprocess.run(["notify-send", "--app-name", "Сжать", "Сжать", f"{msg}\nОшибок: {results['err']}"])
     write(100, f"Ошибок: {results['err']}")
 else:
     src_dirs = list(dict.fromkeys(str(Path(f).parent) for f in files))

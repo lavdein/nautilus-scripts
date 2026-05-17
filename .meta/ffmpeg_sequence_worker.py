@@ -70,9 +70,8 @@ for tmp in (filelist, prog_tmp, stderr_tmp):
         pass
 
 if proc.returncode != 0:
-    subprocess.run(["notify-send", "Секвенция в видео",
-                    "Ошибка сборки. Проверьте что все изображения одного размера.",
-                    "-i", "dialog-warning"])
+    subprocess.run(["notify-send", "--app-name", "Секвенция", "Секвенция",
+                    "Ошибка сборки. Проверьте что все изображения одного размера."])
     write(100, "Ошибка")
 else:
     Path(progress_file).write_text(f"DONE|Готово: {dst.name}|{str(parent)}")

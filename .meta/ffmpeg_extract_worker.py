@@ -91,7 +91,7 @@ for i, src in enumerate(files):
 
 if errors:
     body = "Не удалось обработать:\n" + "\n".join(f"• {e}" for e in errors)
-    subprocess.run(["notify-send", "Видео в секвенцию", body, "-i", "dialog-warning"])
+    subprocess.run(["notify-send", "--app-name", "Секвенция", "Секвенция", body])
     write(100, f"Ошибок: {len(errors)}")
 else:
     Path(progress_file).write_text(

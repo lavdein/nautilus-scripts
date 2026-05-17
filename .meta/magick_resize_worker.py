@@ -50,7 +50,7 @@ for i, src in enumerate(files):
 
 if errors:
     body = "Не удалось обработать:\n" + "\n".join(f"• {e}" for e in errors)
-    subprocess.run(["notify-send", "Изменить размер", body, "-i", "dialog-warning"])
+    subprocess.run(["notify-send", "--app-name", "Обработать изображения", "Обработать изображения", body])
     write(100, f"Ошибок: {len(errors)}")
 else:
     all_dirs = list(dict.fromkeys(str(Path(f).parent) for f in files))
