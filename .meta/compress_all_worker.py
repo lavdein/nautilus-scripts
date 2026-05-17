@@ -163,35 +163,64 @@ def compress_image(src: Path, dst: Path) -> subprocess.CompletedProcess:
 class _Result:
     def __init__(self, code): self.returncode = code
 
+
+def _encoder_cmds(src: Path) -> list[list[str]]:
+    """Return ffmpeg command prefixes to try, in priority order."""
+    crf    = str(P["crf"])
+    common = ["-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"]
+    cmds   = []
+
+    # VAAPI — Intel / AMD
+    dri = list(Path("/dev/dri").glob("render*")) if Path("/dev/dri").exists() else []
+    if dri:
+        cmds.append(["ffmpeg", "-y", "-vaapi_device", str(dri[0]),
+                     "-i", str(src), "-vf", "format=nv12,hwupload",
+                     "-c:v", "h264_vaapi", "-qp", crf] + common)
+
+    # NVENC — NVIDIA
+    if shutil.which("nvidia-smi"):
+        cmds.append(["ffmpeg", "-y", "-i", str(src),
+                     "-c:v", "h264_nvenc", "-cq", crf, "-preset", "p4"] + common)
+
+    # Software fallback
+    cmds.append(["ffmpeg", "-y", "-i", str(src),
+                 "-c:v", "libx264", "-crf", crf, "-preset", P["speed"]] + common)
+
+    return cmds
+
+
 def compress_video(src: Path, dst: Path, i: int, total: int) -> _Result:
-    dur_us   = probe_duration_us(str(src))
-    prog_tmp = tempfile.mktemp(prefix="ffcomp_prog_")
-    err_tmp  = tempfile.mktemp(prefix="ffcomp_err_")
-    proc = subprocess.Popen(
-        ["ffmpeg", "-y", "-i", str(src),
-         "-c:v", "libx264", "-crf", str(P["crf"]), "-preset", P["speed"],
-         "-c:a", "aac", "-b:a", "128k",
-         "-movflags", "+faststart",
-         "-progress", prog_tmp, str(dst)],
-        stderr=open(err_tmp, "w"), stdout=subprocess.DEVNULL,
-    )
-    while proc.poll() is None:
-        time.sleep(0.25)
-        try:
-            for line in reversed(Path(prog_tmp).read_text().splitlines()):
-                if line.startswith("out_time_us="):
-                    us = int(line.split("=")[1])
-                    if dur_us > 0:
-                        file_pct = min(99, us * 100 // dur_us)
-                        write((i * 100 + file_pct) // total,
-                              f"({i+1}/{total}) {src.name}", str(src.parent))
-                    break
-        except Exception:
-            pass
-    for tmp in (prog_tmp, err_tmp):
-        try: os.unlink(tmp)
-        except FileNotFoundError: pass
-    return _Result(proc.returncode)
+    dur_us = probe_duration_us(str(src))
+
+    for cmd in _encoder_cmds(src):
+        prog_tmp = tempfile.mktemp(prefix="ffcomp_prog_")
+        err_tmp  = tempfile.mktemp(prefix="ffcomp_err_")
+        proc = subprocess.Popen(
+            cmd + ["-progress", prog_tmp, str(dst)],
+            stderr=open(err_tmp, "w"), stdout=subprocess.DEVNULL,
+        )
+        while proc.poll() is None:
+            time.sleep(0.25)
+            try:
+                for line in reversed(Path(prog_tmp).read_text().splitlines()):
+                    if line.startswith("out_time_us="):
+                        us = int(line.split("=")[1])
+                        if dur_us > 0:
+                            file_pct = min(99, us * 100 // dur_us)
+                            write((i * 100 + file_pct) // total,
+                                  f"({i+1}/{total}) {src.name}", str(src.parent))
+                        break
+            except Exception:
+                pass
+        for tmp in (prog_tmp, err_tmp):
+            try: os.unlink(tmp)
+            except FileNotFoundError: pass
+
+        if proc.returncode == 0:
+            return _Result(0)
+        dst.unlink(missing_ok=True)  # clean up failed attempt before retry
+
+    return _Result(1)
 
 
 def compress_audio(src: Path, dst: Path) -> _Result | None:
