@@ -1,4 +1,4 @@
-# Nautilus Scripts
+# gh0st.tools
 
 Скрипты для контекстного меню GNOME Nautilus. Устанавливаются в `~/.local/share/nautilus/scripts/`.
 
