@@ -10,8 +10,12 @@ from pathlib import Path
 
 progress_file = sys.argv[1]
 preset        = sys.argv[2]
-replace_mode  = sys.argv[3] == "Заменить оригинал"
+result_mode   = sys.argv[3]  # "Создать копию" | "В отдельную папку" | "Заменить оригинал"
 files         = [f for f in sys.argv[4:] if f]
+
+replace_mode = result_mode == "Заменить оригинал"
+subdir_mode  = result_mode == "В отдельную папку"
+SUBDIR       = "Сжатые"
 
 # ── Preset settings ───────────────────────────────────────────────────────────
 P = {
@@ -46,11 +50,15 @@ def fmt_size(b):
     return f"{b} B"
 
 
-def unique_dst(p: Path, suffix="_c") -> Path:
-    dst = p.parent / f"{p.stem}{suffix}{p.suffix}"
-    c = 1
+def unique_dst(p: Path, suffix="_c", out_dir: Path = None) -> Path:
+    if out_dir:
+        out_dir.mkdir(exist_ok=True)
+        dst = out_dir / p.name
+    else:
+        dst = p.parent / f"{p.stem}{suffix}{p.suffix}"
+    c, stem = 1, dst.stem
     while dst.exists():
-        dst = p.parent / f"{p.stem}{suffix}_{c}{p.suffix}"
+        dst = dst.parent / f"{stem}_{c}{dst.suffix}"
         c += 1
     return dst
 
@@ -237,7 +245,8 @@ for i, src_str in enumerate(files):
         results["skip"] += 1
         continue
 
-    dst = unique_dst(src)
+    out_dir = (src.parent / SUBDIR) if subdir_mode else None
+    dst = unique_dst(src, out_dir=out_dir)
 
     # Choose compressor
     if ext in IMAGE_EXT:
@@ -293,5 +302,10 @@ if results["err"]:
     subprocess.run(["notify-send", "Сжать", f"{msg}\nОшибок: {results['err']}", "-i", "dialog-warning"])
     write(100, f"Ошибок: {results['err']}")
 else:
-    all_dirs = list(dict.fromkeys(str(Path(f).parent) for f in files))
+    src_dirs = list(dict.fromkeys(str(Path(f).parent) for f in files))
+    if subdir_mode:
+        all_dirs = [str(Path(d) / SUBDIR) for d in src_dirs if (Path(d) / SUBDIR).exists()]
+        all_dirs = all_dirs or src_dirs
+    else:
+        all_dirs = src_dirs
     Path(progress_file).write_text(f"DONE|{msg}|{':'.join(all_dirs)}")
