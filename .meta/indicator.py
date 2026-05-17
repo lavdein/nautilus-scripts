@@ -1,115 +1,90 @@
 #!/usr/bin/env python3
 """
 Shared system-tray progress indicator for Nautilus scripts.
-Usage: indicator.py progress_file
+Uses pystray instead of AppIndicator3.
 
 Progress file protocol:
-  "pct|label|/folder"     — update percentage, label, current folder
-  "DONE|msg|/f1:/f2:/f3"  — show ✓, enable folder open, quit after 3s
+  "pct|label|/folder"     — update spinner and label
+  "DONE|msg|/f1:/f2:/f3"  — notify, show ✓, wait for user to close
   "DONE|msg"              — same but no folder to open
 """
-import gi, sys, os, subprocess, struct, zlib, tempfile
-gi.require_version('AppIndicator3', '0.1')
-gi.require_version('Gtk', '3.0')
-from gi.repository import AppIndicator3, Gtk, GLib
+import sys, os, subprocess, time, threading
+from pathlib import Path
+from PIL import Image
+import pystray
 
 progress_file = sys.argv[1]
 notify_title  = sys.argv[2] if len(sys.argv) > 2 else "Готово"
 
 SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-tick = [0]
 
-# Mutable folder state — updated by poll(), read by open handler
-folder_state = {"paths": []}
+state = {"folders": [], "done": False, "info": "Подготовка..."}
 
 
-def _transparent_png():
-    """1×1 transparent PNG so AppIndicator shows label only, no icon."""
-    def chunk(tag, data=b""):
-        c = tag + data
-        return struct.pack(">I", len(data)) + c + struct.pack(">I", zlib.crc32(c) & 0xffffffff)
-    sig  = b"\x89PNG\r\n\x1a\n"
-    ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
-    idat = chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00\x00"))
-    iend = chunk(b"IEND")
-    tmp  = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-    tmp.write(sig + ihdr + idat + iend)
-    tmp.close()
-    return tmp.name
+def _open_folders(icon, item):
+    if state["folders"]:
+        subprocess.Popen(["nautilus"] + state["folders"])
 
-_icon_path = _transparent_png()
 
-indicator = AppIndicator3.Indicator.new(
-    "nautilus-script-progress",
-    _icon_path,
-    AppIndicator3.IndicatorCategory.APPLICATION_STATUS,
+def _quit(icon, item):
+    icon.stop()
+
+
+menu = pystray.Menu(
+    pystray.MenuItem(lambda item: state["info"], None, enabled=False),
+    pystray.MenuItem(
+        lambda item: "Открыть папки" if len(state["folders"]) > 1 else "Открыть папку",
+        _open_folders,
+        enabled=lambda item: bool(state["folders"]),
+    ),
+    pystray.Menu.SEPARATOR,
+    pystray.MenuItem(lambda item: "Закрыть" if state["done"] else "Отменить", _quit),
 )
-indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
-indicator.set_label(f"{SPINNER[0]}  0%", "⠏ 100%")
 
-menu      = Gtk.Menu()
-item_info = Gtk.MenuItem(label="Подготовка...")
-item_open = Gtk.MenuItem(label="Открыть папку")
-item_open.set_sensitive(False)
-item_sep  = Gtk.SeparatorMenuItem()
-item_quit = Gtk.MenuItem(label="Отменить")
-
-item_quit.connect("activate", lambda _: Gtk.main_quit())
-item_open.connect("activate", lambda _: (
-    subprocess.Popen(["nautilus"] + folder_state["paths"])
-    if folder_state["paths"] else None
-))
-
-for w in (item_info, item_open, item_sep, item_quit):
-    menu.append(w)
-menu.show_all()
-indicator.set_menu(menu)
+icon = pystray.Icon(
+    "nautilus-progress",
+    Image.new("RGBA", (16, 16), (0, 0, 0, 0)),
+    "Подготовка...",
+    menu,
+)
 
 
 def poll():
-    try:
-        data = open(progress_file).read().strip()
-    except FileNotFoundError:
-        Gtk.main_quit()
-        return False
+    tick = 0
+    while True:
+        time.sleep(0.4)
+        try:
+            data = Path(progress_file).read_text().strip()
+        except FileNotFoundError:
+            icon.stop()
+            return
 
-    parts = data.split("|", 2)
+        parts = data.split("|", 2)
 
-    if parts[0] == "DONE":
-        msg    = parts[1] if len(parts) > 1 else ""
-        fstr   = parts[2] if len(parts) > 2 else ""
-        paths  = [p for p in fstr.split(":") if p]
-        if paths:
-            folder_state["paths"] = paths
-            n = len(paths)
-            item_open.set_label("Открыть папку" if n == 1 else f"Открыть папки ({n})")
-            item_open.set_sensitive(True)
-        subprocess.run(["notify-send", "--app-name", notify_title, notify_title, msg])
-        indicator.set_label(" ✓", " ✓")
-        item_info.set_label(msg)
-        item_quit.set_label("Закрыть")
-        return False
+        if parts[0] == "DONE":
+            msg   = parts[1] if len(parts) > 1 else ""
+            fstr  = parts[2] if len(parts) > 2 else ""
+            state["folders"] = [p for p in fstr.split(":") if p]
+            state["done"]    = True
+            state["info"]    = msg
+            icon.title = " ✓"
+            subprocess.run(["notify-send", "--app-name", notify_title, notify_title, msg])
+            return
 
-    pct    = parts[0]
-    label  = parts[1] if len(parts) > 1 else ""
-    folder = parts[2] if len(parts) > 2 else ""
-
-    if folder:
-        folder_state["paths"] = [folder]
-        item_open.set_sensitive(True)
-
-    spin = SPINNER[tick[0] % len(SPINNER)]
-    tick[0] += 1
-    indicator.set_label(f"{spin} {pct}%", "⠏ 100%")
-    item_info.set_label(label)
-    return True
+        pct    = parts[0]
+        label  = parts[1] if len(parts) > 1 else ""
+        folder = parts[2] if len(parts) > 2 else ""
+        if folder:
+            state["folders"] = [folder]
+        state["info"] = label
+        icon.title = f"{SPINNER[tick % len(SPINNER)]} {pct}%"
+        tick += 1
 
 
-GLib.timeout_add(400, poll)
-Gtk.main()
+threading.Thread(target=poll, daemon=True).start()
+icon.run()
 
-for _f in (progress_file, _icon_path):
-    try:
-        os.unlink(_f)
-    except OSError:
-        pass
+try:
+    os.unlink(progress_file)
+except OSError:
+    pass
