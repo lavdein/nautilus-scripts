@@ -8,7 +8,7 @@ Progress file protocol:
   "DONE|msg|/f1:/f2:/f3"  — show ✓, enable folder open, quit after 3s
   "DONE|msg"              — same but no folder to open
 """
-import gi, sys, os, subprocess
+import gi, sys, os, subprocess, struct, zlib, tempfile
 gi.require_version('AppIndicator3', '0.1')
 gi.require_version('Gtk', '3.0')
 from gi.repository import AppIndicator3, Gtk, GLib
@@ -22,9 +22,26 @@ tick = [0]
 # Mutable folder state — updated by poll(), read by open handler
 folder_state = {"paths": []}
 
+
+def _transparent_png():
+    """1×1 transparent PNG so AppIndicator shows label only, no icon."""
+    def chunk(tag, data=b""):
+        c = tag + data
+        return struct.pack(">I", len(data)) + c + struct.pack(">I", zlib.crc32(c) & 0xffffffff)
+    sig  = b"\x89PNG\r\n\x1a\n"
+    ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+    idat = chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00\x00"))
+    iend = chunk(b"IEND")
+    tmp  = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    tmp.write(sig + ihdr + idat + iend)
+    tmp.close()
+    return tmp.name
+
+_icon_path = _transparent_png()
+
 indicator = AppIndicator3.Indicator.new(
     "nautilus-script-progress",
-    "emblem-synchronizing",
+    _icon_path,
     AppIndicator3.IndicatorCategory.APPLICATION_STATUS,
 )
 indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
@@ -68,7 +85,6 @@ def poll():
             item_open.set_label("Открыть папку" if n == 1 else f"Открыть папки ({n})")
             item_open.set_sensitive(True)
         subprocess.run(["notify-send", "--app-name", notify_title, notify_title, msg])
-        indicator.set_icon("emblem-default")
         indicator.set_label(" ✓", " ✓")
         item_info.set_label(msg)
         GLib.timeout_add(3000, Gtk.main_quit)
@@ -92,7 +108,8 @@ def poll():
 GLib.timeout_add(400, poll)
 Gtk.main()
 
-try:
-    os.unlink(progress_file)
-except OSError:
-    pass
+for _f in (progress_file, _icon_path):
+    try:
+        os.unlink(_f)
+    except OSError:
+        pass
