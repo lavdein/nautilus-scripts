@@ -87,7 +87,7 @@ def poll():
         subprocess.run(["notify-send", "--app-name", notify_title, notify_title, msg])
         indicator.set_label(" ✓", " ✓")
         item_info.set_label(msg)
-        GLib.timeout_add(3000, Gtk.main_quit)
+        item_quit.set_label("Закрыть")
         return False
 
     pct    = parts[0]

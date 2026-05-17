@@ -39,60 +39,64 @@ def fmt_ts(t):
 write(0, "Загрузка модели...")
 
 try:
-    model  = WhisperModel(model_id, device="cuda", compute_type="float16", download_root=models_dir)
-    device = "GPU"
-except Exception:
-    model  = WhisperModel(model_id, device="cpu", compute_type="int8", download_root=models_dir)
-    device = "CPU"
-
-UPDATE_INTERVAL = 1.5
-
-for idx, file_path in enumerate(files):
-    path     = Path(file_path)
-    out      = path.parent / path.stem
-    name     = path.name
-    base_pct = idx * 100 // total
-
-    write(base_pct, f"[{device}] {name}", str(path.parent))
-
     try:
-        duration = get_duration(file_path)
+        model  = WhisperModel(model_id, device="cuda", compute_type="float16", download_root=models_dir)
+        device = "GPU"
     except Exception:
-        duration = None
+        model  = WhisperModel(model_id, device="cpu", compute_type="int8", download_root=models_dir)
+        device = "CPU"
 
-    segments_gen, _ = model.transcribe(
-        file_path,
-        language=lang,
-        beam_size=5,
-        vad_filter=True,
-        vad_parameters={"min_silence_duration_ms": 500},
-    )
+    UPDATE_INTERVAL = 1.5
 
-    txt_parts, srt_parts = [], []
-    last_update = 0.0
-    seg_num = 0
+    for idx, file_path in enumerate(files):
+        path     = Path(file_path)
+        out      = path.parent / path.stem
+        name     = path.name
+        base_pct = idx * 100 // total
 
-    for seg in segments_gen:
-        seg_num += 1
-        txt_parts.append(seg.text.strip())
+        write(base_pct, f"[{device}] {name}", str(path.parent))
+
+        try:
+            duration = get_duration(file_path)
+        except Exception:
+            duration = None
+
+        segments_gen, _ = model.transcribe(
+            file_path,
+            language=lang,
+            beam_size=5,
+            vad_filter=True,
+            vad_parameters={"min_silence_duration_ms": 500},
+        )
+
+        txt_parts, srt_parts = [], []
+        last_update = 0.0
+        seg_num = 0
+
+        for seg in segments_gen:
+            seg_num += 1
+            txt_parts.append(seg.text.strip())
+            if do_srt:
+                srt_parts.append(
+                    f"{seg_num}\n{fmt_ts(seg.start)} --> {fmt_ts(seg.end)}\n{seg.text.strip()}\n"
+                )
+
+            now = time.monotonic()
+            if duration and now - last_update >= UPDATE_INTERVAL:
+                seg_pct   = seg.end / duration
+                total_pct = int((idx + seg_pct) * 100 / total)
+                write(total_pct, f"[{device}] {name}  {int(seg_pct * 100)}%", str(path.parent))
+                last_update = now
+
+        if do_txt:
+            (out.parent / (out.name + ".txt")).write_text("\n".join(txt_parts), encoding="utf-8")
         if do_srt:
-            srt_parts.append(
-                f"{seg_num}\n{fmt_ts(seg.start)} --> {fmt_ts(seg.end)}\n{seg.text.strip()}\n"
-            )
+            (out.parent / (out.name + ".srt")).write_text("\n".join(srt_parts), encoding="utf-8")
 
-        now = time.monotonic()
-        if duration and now - last_update >= UPDATE_INTERVAL:
-            seg_pct   = seg.end / duration
-            total_pct = int((idx + seg_pct) * 100 / total)
-            write(total_pct, f"[{device}] {name}  {int(seg_pct * 100)}%", str(path.parent))
-            last_update = now
+        write((idx + 1) * 100 // total, f"✓ {name}", str(path.parent))
 
-    if do_txt:
-        (out.parent / (out.name + ".txt")).write_text("\n".join(txt_parts), encoding="utf-8")
-    if do_srt:
-        (out.parent / (out.name + ".srt")).write_text("\n".join(srt_parts), encoding="utf-8")
+    all_dirs = list(dict.fromkeys(str(Path(f).parent) for f in files))
+    Path(progress_file).write_text(f"DONE|Готово: {total} файл(ов)|{':'.join(all_dirs)}")
 
-    write((idx + 1) * 100 // total, f"✓ {name}", str(path.parent))
-
-all_dirs = list(dict.fromkeys(str(Path(f).parent) for f in files))
-Path(progress_file).write_text(f"DONE|Готово: {total} файл(ов)|{':'.join(all_dirs)}")
+except Exception as e:
+    Path(progress_file).write_text(f"DONE|Ошибка: {e}")
