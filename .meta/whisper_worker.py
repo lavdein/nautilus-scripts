@@ -95,8 +95,14 @@ try:
 
         write((idx + 1) * 100 // total, f"✓ {name}", str(path.parent))
 
+    msg      = f"Готово: {total} файл(ов)"
     all_dirs = list(dict.fromkeys(str(Path(f).parent) for f in files))
-    Path(progress_file).write_text(f"DONE|Готово: {total} файл(ов)|{':'.join(all_dirs)}")
+    subprocess.run(["notify-send", "--app-name", "Транскрипция Whisper",
+                    "Транскрипция Whisper", msg])
+    Path(progress_file).write_text(f"DONE|{msg}|{':'.join(all_dirs)}")
 
 except Exception as e:
-    Path(progress_file).write_text(f"DONE|Ошибка: {e}")
+    msg = f"Ошибка: {e}"
+    subprocess.run(["notify-send", "--app-name", "Транскрипция Whisper",
+                    "Транскрипция Whisper", msg])
+    Path(progress_file).write_text(f"DONE|{msg}")
