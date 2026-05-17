@@ -115,10 +115,11 @@ class FormApp(Adw.Application):
                 dep_idx, dep_val = condition
                 dep_widget, dep_getter = field_data[dep_idx]
 
-                def update_vis(_, __, w=widget, dg=dep_getter, dv=dep_val):
-                    w.set_visible(dg() == dv)
+                def update_vis(_, __, w=widget, dg=dep_getter, dv=dep_val, dw=dep_widget):
+                    w.set_visible(dw.get_visible() and dg() == dv)
 
                 dep_widget.connect("notify::selected", update_vis)
+                dep_widget.connect("notify::visible", update_vis)
                 update_vis(None, None)
 
         win.present()

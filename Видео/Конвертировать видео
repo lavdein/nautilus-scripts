@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+SCRIPTS_ROOT="$(dirname "$(dirname "$(realpath "$0")")")"
+PYTHON="/usr/bin/python3"
+
+mapfile -t all_files <<< "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"
+files=()
+for f in "${all_files[@]}"; do
+    [ -z "$f" ] && continue
+    ext="${f##*.}"; ext="${ext,,}"
+    [[ "$ext" =~ ^(mp4|mkv|avi|mov|webm|flv|ts|m2ts|wmv)$ ]] && files+=("$f")
+done
+
+if [ ${#files[@]} -eq 0 ]; then
+    notify-send "Конвертировать видео" "Не выбрано ни одного видео-файла." -i dialog-error
+    exit 1
+fi
+
+OPTIONS=$("$PYTHON" "$SCRIPTS_ROOT/.meta/form.py" \
+    "Конвертировать видео" \
+    "${#files[@]} файл(ов)" \
+    "Конвертировать" \
+    "Режим:Перепаковать без потерь|Сжать (H.264)" \
+    "@0=Перепаковать без потерь|Формат:MP4|MKV|MOV|AVI" \
+    "@0=Сжать (H.264)|Качество:Высокое качество|Баланс|Для интернета|Минимальный размер") || exit 0
+
+mode=$(echo "$OPTIONS"    | cut -d'|' -f1)
+format=$(echo "$OPTIONS"  | cut -d'|' -f2 | tr '[:upper:]' '[:lower:]')
+quality=$(echo "$OPTIONS" | cut -d'|' -f3)
+
+PROGRESS_FILE=$(mktemp /tmp/vid-convert-XXXXX)
+export GI_TYPELIB_PATH="/usr/lib64/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
+
+if [[ "$mode" == "Перепаковать без потерь" ]]; then
+    valid_files=()
+    for f in "${files[@]}"; do
+        ext="${f##*.}"; ext="${ext,,}"
+        [ "$ext" != "$format" ] && valid_files+=("$f")
+    done
+    if [ ${#valid_files[@]} -eq 0 ]; then
+        notify-send "Конвертировать видео" "Все файлы уже в формате ${format^^}." -i dialog-information
+        exit 0
+    fi
+    nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/ffmpeg_remux_worker.py" \
+        "$PROGRESS_FILE" "$format" "${valid_files[@]}" \
+        >/tmp/vid-convert-worker.log 2>&1 &
+else
+    case "$quality" in
+        "Высокое качество") crf=20; speed="slow"    ;;
+        "Баланс")           crf=26; speed="medium"  ;;
+        "Для интернета")    crf=30; speed="fast"     ;;
+        "Минимальный размер") crf=36; speed="veryfast" ;;
+    esac
+    nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/ffmpeg_compress_worker.py" \
+        "$PROGRESS_FILE" "$crf" "$speed" "${files[@]}" \
+        >/tmp/vid-convert-worker.log 2>&1 &
+fi
+
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Конвертировать видео"

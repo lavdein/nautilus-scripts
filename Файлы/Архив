@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+SCRIPTS_ROOT="$(dirname "$(dirname "$(realpath "$0")")")"
+PYTHON="/usr/bin/python3"
+
+mapfile -t all_files <<< "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"
+files=()
+for f in "${all_files[@]}"; do [ -n "$f" ] && files+=("$f"); done
+
+if [ ${#files[@]} -eq 0 ]; then
+    notify-send "Архив" "Файлы не выбраны." -i dialog-error
+    exit 1
+fi
+
+op=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
+    "Архив" \
+    "${#files[@]} файл(ов)" \
+    "Создать архив|Упаковать выбранные файлы" \
+    "Распаковать|Извлечь содержимое архива") || exit 0
+
+PROGRESS_FILE=$(mktemp /tmp/archive-XXXXX)
+export GI_TYPELIB_PATH="/usr/lib64/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
+
+if [[ "$op" == "Создать архив" ]]; then
+    parent=$(dirname "${files[0]}")
+    default_name=$(basename "${files[0]}")
+    [ ${#files[@]} -gt 1 ] && default_name="архив"
+
+    name=$(zenity --entry \
+        --title="Создать архив" \
+        --text="Имя архива (без расширения):" \
+        --entry-text="$default_name" \
+        --width=380 2>/dev/null) || exit 0
+    [ -z "$name" ] && exit 0
+
+    format=$("$PYTHON" "$SCRIPTS_ROOT/.meta/pick.py" \
+        "Формат архива" \
+        "Выберите формат сжатия" \
+        "zip|Универсальный, открывается везде" \
+        "tar.gz|Хорошее сжатие, быстро" \
+        "tar.xz|Максимальное сжатие, медленнее") || exit 0
+
+    output="$parent/$name.$format"
+    c=1
+    while [ -f "$output" ]; do
+        output="$parent/${name}_${c}.$format"
+        c=$((c + 1))
+    done
+
+    names=()
+    for f in "${files[@]}"; do names+=("$(basename "$f")"); done
+
+    nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/archive_worker.py" \
+        "$PROGRESS_FILE" "$output" "$format" "${names[@]}" \
+        >/tmp/archive-worker.log 2>&1 &
+else
+    # Filter: only archive files
+    archives=()
+    for f in "${files[@]}"; do
+        name_lower="${f,,}"
+        [[ "$name_lower" =~ \.(zip|tar\.gz|tgz|tar\.xz|tar\.bz2|tar)$ ]] && archives+=("$f")
+    done
+    if [ ${#archives[@]} -eq 0 ]; then
+        notify-send "Архив" "Не найдено архивов среди выбранных файлов." -i dialog-error
+        exit 1
+    fi
+    nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/archive_extract_worker.py" \
+        "$PROGRESS_FILE" "${archives[@]}" \
+        >/tmp/archive-worker.log 2>&1 &
+fi
+
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Архив"

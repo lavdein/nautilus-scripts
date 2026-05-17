@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+SCRIPTS_ROOT="$(dirname "$(dirname "$(realpath "$0")")")"
+PYTHON="/usr/bin/python3"
+
+mapfile -t all_files <<< "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"
+files=()
+for f in "${all_files[@]}"; do [ -n "$f" ] && files+=("$f"); done
+
+if [ ${#files[@]} -eq 0 ]; then
+    notify-send "Секвенция" "Файлы не выбраны." -i dialog-error
+    exit 1
+fi
+
+OPTIONS=$("$PYTHON" "$SCRIPTS_ROOT/.meta/form.py" \
+    "Секвенция" \
+    "${#files[@]} файл(ов)" \
+    "Запустить" \
+    "Направление:Видео → кадры|Кадры → видео" \
+    "@0=Видео → кадры|Частота:1 кадр/с|2 кадра/с|5 кадров/с|10 кадров/с|Каждый кадр" \
+    "@0=Видео → кадры|Формат кадра:PNG|JPG|WEBP" \
+    "@0=Кадры → видео|Частота кадров:12 fps|24 fps|25 fps|30 fps|60 fps" \
+    "@0=Кадры → видео|Формат видео:MP4|MKV") || exit 0
+
+dir=$(echo "$OPTIONS"    | cut -d'|' -f1)
+freq=$(echo "$OPTIONS"   | cut -d'|' -f2)
+imgfmt=$(echo "$OPTIONS" | cut -d'|' -f3 | tr '[:upper:]' '[:lower:]')
+vfps=$(echo "$OPTIONS"   | cut -d'|' -f4)
+vfmt=$(echo "$OPTIONS"   | cut -d'|' -f5 | tr '[:upper:]' '[:lower:]')
+
+PROGRESS_FILE=$(mktemp /tmp/seq-XXXXX)
+export GI_TYPELIB_PATH="/usr/lib64/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
+
+if [[ "$dir" == "Видео → кадры" ]]; then
+    video_files=()
+    for f in "${files[@]}"; do
+        ext="${f##*.}"; ext="${ext,,}"
+        [[ "$ext" =~ ^(mp4|mkv|avi|mov|webm|flv|ts|m2ts|wmv)$ ]] && video_files+=("$f")
+    done
+    if [ ${#video_files[@]} -eq 0 ]; then
+        notify-send "Секвенция" "Не найдено видео-файлов среди выбранных." -i dialog-error
+        exit 1
+    fi
+    case "$freq" in
+        "1 кадр/с")    fps_val="1"  ;;
+        "2 кадра/с")   fps_val="2"  ;;
+        "5 кадров/с")  fps_val="5"  ;;
+        "10 кадров/с") fps_val="10" ;;
+        "Каждый кадр") fps_val=""   ;;
+    esac
+    nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/ffmpeg_extract_worker.py" \
+        "$PROGRESS_FILE" "$fps_val" "$imgfmt" "${video_files[@]}" \
+        >/tmp/seq-worker.log 2>&1 &
+else
+    img_files=()
+    for f in "${files[@]}"; do
+        ext="${f##*.}"; ext="${ext,,}"
+        [[ "$ext" =~ ^(png|jpg|jpeg|webp|tiff|tif|bmp)$ ]] && img_files+=("$f")
+    done
+    if [ ${#img_files[@]} -lt 2 ]; then
+        notify-send "Секвенция" "Выберите минимум 2 изображения." -i dialog-error
+        exit 1
+    fi
+    fps_val="${vfps%% *}"
+    nohup "$PYTHON" "$SCRIPTS_ROOT/.meta/ffmpeg_sequence_worker.py" \
+        "$PROGRESS_FILE" "$fps_val" "$vfmt" "${img_files[@]}" \
+        >/tmp/seq-worker.log 2>&1 &
+fi
+
+exec "$PYTHON" "$SCRIPTS_ROOT/.meta/indicator.py" "$PROGRESS_FILE" "Секвенция"
